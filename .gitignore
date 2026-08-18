@@ -31,3 +31,6 @@ ROADMAP.md
 
 # Logs
 *.log
+
+# Test artifacts
+.playwright-mcp/
