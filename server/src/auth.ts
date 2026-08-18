@@ -11,6 +11,8 @@ export function safeEqual(a: string, b: string): boolean {
 }
 
 const authPlugin: FastifyPluginAsync<AuthOptions> = async (fastify, opts) => {
+  if (!opts.secret) return // open local mode: no secret configured, skip auth
+
   fastify.addHook('onRequest', async (request, reply) => {
     const auth = request.headers.authorization
     if (!auth || !safeEqual(auth, `Bearer ${opts.secret}`)) {

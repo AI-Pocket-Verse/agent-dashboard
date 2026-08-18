@@ -26,6 +26,12 @@ describe('authPlugin', () => {
     expect(res.statusCode).toBe(401)
   })
 
+  it('allows all requests when secret is empty (open local mode)', async () => {
+    const app = await buildApp('')
+    const res = await app.inject({ method: 'GET', url: '/protected' })
+    expect(res.statusCode).toBe(200)
+  })
+
   it('allows correct password', async () => {
     const app = await buildApp('test-secret')
     const res = await app.inject({

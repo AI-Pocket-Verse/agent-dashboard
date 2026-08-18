@@ -21,7 +21,8 @@ if [ ! -f "$ENV_FILE" ]; then
   echo "[info] 未找到 .env，自动生成..."
   PROJECT_ROOT_VAL="$(dirname "$DIR")"
   cat > "$ENV_FILE" <<EOF
-DASHBOARD_SECRET=$(openssl rand -hex 16)
+# 留空 = 本机免密模式（不弹登录页）；部署到服务器必须设置，例如：openssl rand -hex 16
+DASHBOARD_SECRET=
 PROJECT_ROOT=$PROJECT_ROOT_VAL
 WORKSPACE_ROOT=$PROJECT_ROOT_VAL/workspace
 CLAUDE_BIN=claude
@@ -103,7 +104,11 @@ echo "  Agent Dashboard 已启动"
 echo ""
 echo "  Web UI  ->  http://localhost:$CLIENT_PORT"
 echo "  API     ->  http://localhost:$PORT/api"
-echo "  密码    ->  $SECRET"
+if [ -n "$SECRET" ]; then
+  echo "  密码    ->  $SECRET"
+else
+  echo "  密码    ->  （未设置，本机免密模式）"
+fi
 echo "================================================"
 echo ""
 

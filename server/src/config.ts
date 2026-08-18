@@ -10,7 +10,9 @@ function required(name: string): string {
 const projectRoot = required('PROJECT_ROOT')
 
 export const config = {
-  secret: required('DASHBOARD_SECRET'),
+  // Empty secret = open local mode: HTTP/WS auth disabled, no login gate.
+  // Any non-localhost deployment must set DASHBOARD_SECRET.
+  secret: process.env.DASHBOARD_SECRET ?? '',
   projectRoot,
   workspaceRoot: process.env.WORKSPACE_ROOT ?? join(projectRoot, 'workspace'),
   claudeBin: process.env.CLAUDE_BIN ?? 'claude',

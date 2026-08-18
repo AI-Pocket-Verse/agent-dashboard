@@ -23,6 +23,13 @@ describe('WsManager auth', () => {
     expect(wrongSecretCode).toBe(4401)
   })
 
+  it('accepts secretless connections when no secret is configured (open local mode)', async () => {
+    manager = new WsManager(TEST_PORT, '', () => {})
+    const ws = new WebSocket(`ws://127.0.0.1:${TEST_PORT}`)
+    await new Promise(resolve => ws.on('open', resolve))
+    ws.close()
+  })
+
   it('accepts connections with the correct secret and delivers messages', async () => {
     const received: unknown[] = []
     manager = new WsManager(TEST_PORT, 'test-secret', msg => { received.push(msg) })

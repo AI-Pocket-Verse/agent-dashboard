@@ -12,7 +12,7 @@ export class WsManager {
 
     this.wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
       const token = new URL(req.url ?? '/', 'ws://localhost').searchParams.get('secret') ?? ''
-      if (!safeEqual(token, secret)) {
+      if (secret && !safeEqual(token, secret)) {
         ws.close(4401, 'Unauthorized')
         return
       }
