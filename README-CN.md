@@ -4,6 +4,10 @@
 
 把多个 Claude Code agent 编排成 DAG 工作流的 Web 看板。在画布上摆放 agent、连线成流水线，每个节点真实拉起 `claude` CLI 进程执行，日志实时流式展示。
 
+![工作流画布](docs/images/canvas.png)
+
+![创建任务](docs/images/dashboard.png)
+
 ## 功能
 
 - **DAG 工作流画布** —— 将自定义 agent 与 OMC agent 组合成串行/并行流水线（基于 @xyflow）；节点输出通过 `{{nodes.<id>.output}}` 插值传入下游提示词。

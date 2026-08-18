@@ -4,6 +4,10 @@ English | [中文](README-CN.md)
 
 A web dashboard for orchestrating multiple Claude Code agents as DAG workflows. Draw agents on a canvas, wire them into a pipeline, and watch each node spawn a real `claude` CLI process with live streaming logs.
 
+![Workflow canvas](docs/images/canvas.png)
+
+![Create a task](docs/images/dashboard.png)
+
 ## Features
 
 - **DAG workflow canvas** — compose custom agents and OMC agents into serial or parallel pipelines (powered by @xyflow); node outputs flow into downstream prompts via `{{nodes.<id>.output}}` interpolation.
