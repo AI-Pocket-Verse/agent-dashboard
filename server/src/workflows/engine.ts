@@ -223,7 +223,9 @@ export class DAGEngine {
     const round = this.createRoundFromPayload('round-1', payload)
     const run: WorkflowRun = {
       id: runId,
-      name: payload.globalPrompt || payload.name,
+      // Display name: truncate so the History list stays legible; the full
+      // request is preserved in `prompt` below.
+      name: (payload.globalPrompt || payload.name).slice(0, 60),
       prompt: payload.globalPrompt,
       projectName: runId,
       workspacePath,

@@ -28,6 +28,21 @@ describe('PersistenceStore', () => {
     expect(runs[0].executionMode).toBe('serial')
   })
 
+  it('fails interrupted runs on startup, leaving finished runs untouched', async () => {
+    const base = { nodes: [], edges: [], requireConfirm: false, createdAt: Date.now() }
+    await store.saveRun({ id: 'r-running', name: 'a', status: 'running', ...base })
+    await store.saveRun({ id: 'r-paused', name: 'b', status: 'paused', ...base })
+    await store.saveRun({ id: 'r-done', name: 'c', status: 'completed', completedAt: Date.now(), ...base })
+
+    const reaped = store.failInterruptedRuns()
+    expect(reaped).toBe(2)
+
+    const byId = new Map((await store.loadRuns()).map(run => [run.id, run.status]))
+    expect(byId.get('r-running')).toBe('failed')
+    expect(byId.get('r-paused')).toBe('failed')
+    expect(byId.get('r-done')).toBe('completed')
+  })
+
   it('loads a single saved run by id with the original prompt', async () => {
     const run: WorkflowRun = {
       id: 'run-detail',

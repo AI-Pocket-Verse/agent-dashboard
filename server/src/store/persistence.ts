@@ -285,6 +285,16 @@ export class PersistenceStore {
     this.db.prepare('DELETE FROM templates WHERE id = ?').run(id)
   }
 
+  // On startup the process has no live children, so any run still marked
+  // running/paused in the DB is an orphan from a previous process — fail it
+  // so the UI can no longer get stuck on a state that can never resolve.
+  failInterruptedRuns(now = Date.now()): number {
+    const result = this.db
+      .prepare("UPDATE runs SET status = 'failed', completed_at = ? WHERE status IN ('running', 'paused')")
+      .run(now)
+    return result.changes
+  }
+
   close(): void {
     this.db.close()
   }

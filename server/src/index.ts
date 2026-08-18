@@ -32,6 +32,10 @@ export async function buildApp() {
 
   const dataDir = resolveDataDir()
   const store = new PersistenceStore(dataDir)
+  // Reap runs left "running"/"paused" by a previous process — their child
+  // processes are gone, so without this they stay stuck in the UI forever.
+  const reaped = store.failInterruptedRuns()
+  if (reaped > 0) app.log.info(`Marked ${reaped} interrupted run(s) as failed`)
   const processManager = new ProcessManager(config.workspaceRoot, config.claudeBin)
 
   let wsManager: WsManager | null = null
