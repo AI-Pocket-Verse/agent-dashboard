@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment & secrets
+.env
+.env.*
+.private/
+
+# Runtime data (real run history, SQLite db, agent workspaces)
+server/data/
+workspace/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# AI local config & working docs
+.claude/
+.omc/
+AGENTS.md
+CLAUDE.md
+ROADMAP.md
+
+# Logs
+*.log

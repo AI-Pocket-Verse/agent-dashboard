@@ -1,0 +1,29 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    # No published ports: only nginx (client) reaches the server via the
+    # internal network. Exposing 3002 directly would bypass the reverse proxy.
+    environment:
+      - DASHBOARD_SECRET=${DASHBOARD_SECRET}
+      - PROJECT_ROOT=${PROJECT_ROOT}
+      - CLAUDE_BIN=${CLAUDE_BIN:-claude}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - DATA_DIR=/app/data
+      - PORT=3001
+      - NODE_ENV=production
+    volumes:
+      - ${PROJECT_ROOT}:${PROJECT_ROOT}
+      - ./server/data:/app/data
+    restart: unless-stopped
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - server
+    restart: unless-stopped
