@@ -172,7 +172,6 @@ export default function LogStream({ runId, roundId, nodeId, logs, logCount, agen
             text={displayText}
             className="block break-words"
             renderMarkdown
-            showCursor={status === 'running'}
             onProgress={handleStreamingProgress}
           />
         </div>

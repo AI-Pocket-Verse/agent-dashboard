@@ -36,10 +36,3 @@ export function getRecentCompactLogs(logs: string[], limit = 120) {
   const scanWindowSize = Math.min(logs.length, safeLimit * 4)
   return compactAdjacentLogBlocks(logs.slice(-scanWindowSize)).slice(-safeLimit)
 }
-
-export function getLogTranscript(logs: string[], limit = 120) {
-  return getRecentCompactLogs(logs, limit)
-    .filter(line => line.trim())
-    .join('\n')
-    .trim()
-}
