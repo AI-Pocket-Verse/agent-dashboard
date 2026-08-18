@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import type { AgentInfo } from '@agent-dashboard/shared'
+import { OMC_AGENTS, type AgentInfo } from '@agent-dashboard/shared'
 import { readdirSync, existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { config } from '../config.js'
@@ -39,17 +39,6 @@ const customAgents = (): Array<Pick<AgentInfo, 'name' | 'description'>> => {
   return [...projectAgents, ...extra]
 }
 
-const omcAgents: AgentInfo[] = [
-  { name: 'planner', type: 'omc', description: '需求规划', status: 'idle' },
-  { name: 'test-engineer', type: 'omc', description: '测试策略', status: 'idle' },
-  { name: 'designer', type: 'omc', description: 'UI/UX 设计', status: 'idle' },
-  { name: 'code-reviewer', type: 'omc', description: '代码审查', status: 'idle' },
-  { name: 'security-reviewer', type: 'omc', description: '安全审查', status: 'idle' },
-  { name: 'architect', type: 'omc', description: '架构设计', status: 'idle' },
-  { name: 'writer', type: 'omc', description: '技术文档', status: 'idle' },
-  { name: 'debugger', type: 'omc', description: '根因分析', status: 'idle' },
-]
-
 const agentsRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get('/api/agents', async () => {
     const custom: AgentInfo[] = customAgents().map(agent => ({
@@ -57,7 +46,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
       type: 'custom',
       status: 'idle',
     }))
-    return [...custom, ...omcAgents]
+    return [...custom, ...OMC_AGENTS]
   })
 }
 

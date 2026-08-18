@@ -183,3 +183,20 @@ export interface AiSelectResponse {
   edges: Edge[]
   explanation: string
 }
+
+// ─── Built-in OMC agents ────────────────────────────────────────────────────────
+// Single source of truth shared by the server (/api/agents), the client store,
+// and the vite dev middleware. Descriptions are fallbacks — the client's
+// AGENT_DESCRIPTION_MAP overrides them for display and the i18n dictionary
+// translates these exact strings.
+
+export const OMC_AGENTS: AgentInfo[] = [
+  { name: 'planner', type: 'omc', description: '需求规划', status: 'idle' },
+  { name: 'test-engineer', type: 'omc', description: '测试验证', status: 'idle' },
+  { name: 'designer', type: 'omc', description: '界面设计', status: 'idle' },
+  { name: 'code-reviewer', type: 'omc', description: '代码审查', status: 'idle' },
+  { name: 'security-reviewer', type: 'omc', description: '安全审查', status: 'idle' },
+  { name: 'architect', type: 'omc', description: '架构设计', status: 'idle' },
+  { name: 'writer', type: 'omc', description: '文档整理', status: 'idle' },
+  { name: 'debugger', type: 'omc', description: '问题排查', status: 'idle' },
+]
