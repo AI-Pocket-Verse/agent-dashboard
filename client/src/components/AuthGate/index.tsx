@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { getToken, setToken, verifyToken } from '../../lib/auth'
+import { t } from '../../lib/i18n'
 
 type GateState = 'checking' | 'login' | 'ready'
 
@@ -38,23 +39,23 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       >
         <div>
           <h1 className="text-lg font-semibold text-[rgb(25,29,38)]">Agent Dashboard</h1>
-          <p className="mt-1 text-sm text-slate-500">输入访问密码（服务端 DASHBOARD_SECRET）</p>
+          <p className="mt-1 text-sm text-slate-500">{t('输入访问密码（服务端 DASHBOARD_SECRET）')}</p>
         </div>
         <input
           type="password"
           autoFocus
           value={input}
           onChange={e => { setInput(e.target.value); setError(false) }}
-          placeholder="访问密码"
+          placeholder={t('访问密码')}
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
         />
-        {error ? <p className="text-sm text-red-500">密码错误，请重试</p> : null}
+        {error ? <p className="text-sm text-red-500">{t('密码错误，请重试')}</p> : null}
         <button
           type="submit"
           disabled={submitting || !input.trim()}
           className="rounded-lg bg-[rgb(25,29,38)] py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          {submitting ? '验证中…' : '进入'}
+          {submitting ? t('验证中…') : t('进入')}
         </button>
       </form>
     </div>

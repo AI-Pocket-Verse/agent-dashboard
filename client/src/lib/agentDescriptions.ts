@@ -1,4 +1,5 @@
 import type { AgentInfo } from '../types/index'
+import { t } from './i18n'
 
 const AGENT_DESCRIPTION_MAP: Record<string, string> = {
   'backend-dev': '后端开发',
@@ -39,24 +40,24 @@ function isChineseText(text: string): boolean {
 
 function getCustomAgentDisplayDescription(agent: Pick<AgentInfo, 'name' | 'description'>): string {
   const mapped = AGENT_DESCRIPTION_MAP[agent.name]
-  if (mapped) return mapped
+  if (mapped) return t(mapped)
 
   const normalized = normalizeDescription(agent.description)
-  if (!normalized) return '专项开发'
-  if (isChineseText(normalized)) return normalized
+  if (!normalized) return t('专项开发')
+  if (isChineseText(normalized)) return t(normalized)
 
   const matched = CUSTOM_AGENT_DESCRIPTION_RULES.find(rule => rule.pattern.test(normalized))
-  if (matched) return matched.text
+  if (matched) return t(matched.text)
 
-  return `专项开发 · ${agent.name}`
+  return `${t('专项开发')} · ${agent.name}`
 }
 
 export function getAgentDisplayDescription(agent: Pick<AgentInfo, 'name' | 'type' | 'description'>): string {
   const mapped = AGENT_DESCRIPTION_MAP[agent.name]
-  if (mapped) return mapped
+  if (mapped) return t(mapped)
 
   if (agent.type === 'custom') return getCustomAgentDisplayDescription(agent)
 
   const normalized = normalizeDescription(agent.description)
-  return normalized || '未填写 Agent 描述'
+  return normalized ? t(normalized) : t('未填写 Agent 描述')
 }

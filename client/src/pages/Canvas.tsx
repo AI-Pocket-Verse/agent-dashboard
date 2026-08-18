@@ -17,6 +17,7 @@ import '@xyflow/react/dist/style.css'
 import ContextMenu from '../components/ContextMenu/index'
 import DialogShell from '../components/DialogShell/index'
 import WorkflowInspector from '../components/WorkflowInspector/index'
+import { t } from '../lib/i18n'
 import {
   WORKFLOW_EDGE_MARKER_COLOR as EDGE_MARKER_COLOR,
   WORKFLOW_EDGE_STROKE as EDGE_STROKE,
@@ -191,10 +192,10 @@ export default function Canvas() {
   const canSaveCurrentTemplate = !isBuiltinTemplate
   const hasActiveWorkflow = Boolean(activeTemplate || draftTemplate)
   const hasWorkflowContent = nodes.length > 0 || edges.length > 0
-  const headerTemplateName = activeTemplate?.name || draftTemplate?.name || '编排你的工作流'
-  const headerTemplateDescription = activeTemplate?.description?.trim()
+  const headerTemplateName = t(activeTemplate?.name || draftTemplate?.name || '编排你的工作流')
+  const headerTemplateDescription = t(activeTemplate?.description?.trim()
     || draftTemplate?.description?.trim()
-    || '将节点按真实依赖关系从上到下组织，分支和汇合会自动展开。'
+    || '将节点按真实依赖关系从上到下组织，分支和汇合会自动展开。')
   const hasUnsavedDraft = Boolean(
     activeTemplate?.transient
     || (
@@ -272,13 +273,13 @@ export default function Canvas() {
 
   const edgeEditorError = useMemo(() => {
     if (!edgeEditor) return ''
-    if (edgeEditor.source === edgeEditor.target) return '连线起点和终点不能是同一个节点'
+    if (edgeEditor.source === edgeEditor.target) return t('连线起点和终点不能是同一个节点')
     const duplicate = edges.some(edge => (
       edge.id !== edgeEditor.edgeId
       && String(edge.source) === edgeEditor.source
       && String(edge.target) === edgeEditor.target
     ))
-    if (duplicate) return '相同的连线已经存在'
+    if (duplicate) return t('相同的连线已经存在')
     return ''
   }, [edgeEditor, edges])
 
@@ -291,7 +292,7 @@ export default function Canvas() {
       && normalizeTemplateName(template.name) === normalizedName
     ))
 
-    return conflict ? '模板名称必须唯一，已自动忽略首尾空格，请使用其他名称' : ''
+    return conflict ? t('模板名称必须唯一，已自动忽略首尾空格，请使用其他名称') : ''
   }, [templateFormDialog?.name, templateFormDialog?.templateId, templates])
 
   const buildAgentNodes = useCallback((
@@ -389,7 +390,7 @@ export default function Canvas() {
     const transientId = `draft-new-${crypto.randomUUID()}`
     const transientTemplate: LocalWorkflowTemplate = {
       id: transientId,
-      name: '未命名模板',
+      name: t('未命名模板'),
       description: '',
       nodes: [],
       edges: [],
@@ -408,7 +409,7 @@ export default function Canvas() {
     const transientTemplate: LocalWorkflowTemplate = {
       ...template,
       id: transientId,
-      name: `${template.name} 副本`,
+      name: `${template.name} ${t('副本')}`,
       description: template.description?.trim() ?? '',
       nodes: template.nodes.map(node => ({ ...node })),
       edges: template.edges.map(edge => ({ ...edge })),
@@ -577,9 +578,9 @@ export default function Canvas() {
         setTemplateFormDialog({
           mode: 'save',
           templateId: activeTemplate.id,
-          title: '保存模板',
-          descriptionText: '填写模板名称和描述，保存当前编排结果。',
-          submitLabel: '确认保存',
+          title: t('保存模板'),
+          descriptionText: t('填写模板名称和描述，保存当前编排结果。'),
+          submitLabel: t('确认保存'),
           name: activeTemplate.name,
           templateDescription: activeTemplate.description ?? '',
         })
@@ -607,9 +608,9 @@ export default function Canvas() {
 
     setTemplateFormDialog({
       mode: 'save',
-      title: '保存模板',
-      descriptionText: '填写模板名称和描述，保存当前编排结果。',
-      submitLabel: '确认保存',
+      title: t('保存模板'),
+      descriptionText: t('填写模板名称和描述，保存当前编排结果。'),
+      submitLabel: t('确认保存'),
       name: draftTemplate?.name ?? '',
       templateDescription: draftTemplate?.description ?? '',
     })
@@ -689,8 +690,8 @@ export default function Canvas() {
       setTemplateFormDialog(null)
     } catch (error) {
       const message = axios.isAxiosError(error) && error.response?.status === 409
-        ? '模板名称必须唯一，已自动忽略首尾空格，请使用其他名称'
-        : '保存失败，请稍后重试'
+        ? t('模板名称必须唯一，已自动忽略首尾空格，请使用其他名称')
+        : t('保存失败，请稍后重试')
       setTemplateFormDialog(prev => prev ? { ...prev, error: message } : prev)
     }
   }, [edges, nodes, templateFormDialog, templateNameConflictError, templates])
@@ -753,7 +754,7 @@ export default function Canvas() {
         id: newId,
         agentName: target.data.agentName,
         agentType: target.data.agentType,
-        displayName: target.data.displayName ? `${target.data.displayName} 副本` : undefined,
+        displayName: target.data.displayName ? `${target.data.displayName} ${t('副本')}` : undefined,
         promptTemplate: target.data.promptTemplate,
       },
     ]
@@ -957,9 +958,9 @@ export default function Canvas() {
     setTemplateFormDialog({
       mode: 'rename',
       templateId: target.id,
-      title: '重命名模板',
-      descriptionText: '修改模板名称和描述，不影响当前编排内容。',
-      submitLabel: '确认修改',
+      title: t('重命名模板'),
+      descriptionText: t('修改模板名称和描述，不影响当前编排内容。'),
+      submitLabel: t('确认修改'),
       name: target.name,
       templateDescription: target.description ?? '',
     })
@@ -1005,10 +1006,10 @@ export default function Canvas() {
         <div className="px-4 py-3.5 md:px-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-[1.2rem] font-semibold tracking-[-0.04em] text-black">模板</h2>
+              <h2 className="text-[1.2rem] font-semibold tracking-[-0.04em] text-black">{t('模板')}</h2>
             </div>
             <button onClick={() => requestDraftExitAction({ type: 'new-template' })} className="btn-secondary h-10 shrink-0 px-5 py-0 text-sm">
-              + 新建
+              {t('+ 新建')}
             </button>
           </div>
         </div>
@@ -1024,7 +1025,7 @@ export default function Canvas() {
                   : 'text-slate-500 hover:text-black'
               }`}
             >
-              模板列表
+              {t('模板列表')}
             </button>
             <button
               type="button"
@@ -1038,16 +1039,16 @@ export default function Canvas() {
                     : 'text-slate-500 hover:text-black'
               }`}
             >
-              添加节点
+              {t('添加节点')}
             </button>
           </div>
 
           {sidebarTab === 'templates' ? (
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="mb-2.5 flex items-center justify-between gap-3">
-                <div className="text-[13px] font-semibold uppercase tracking-[0.12em] text-black">模板列表</div>
+                <div className="text-[13px] font-semibold uppercase tracking-[0.12em] text-black">{t('模板列表')}</div>
                 <div className="rounded-full border border-black/10 bg-transparent px-2.5 py-1 text-[10px] font-semibold text-black">
-                  {templates.length} 项
+                  {templates.length} {t('项')}
                 </div>
               </div>
               <div
@@ -1083,11 +1084,11 @@ export default function Canvas() {
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
-                            <div className={`truncate text-[13px] ${activeId === template.id ? 'font-semibold' : 'font-medium'}`}>{template.name}</div>
+                            <div className={`truncate text-[13px] ${activeId === template.id ? 'font-semibold' : 'font-medium'}`}>{t(template.name)}</div>
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
                             <div className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${typeBadgeClass}`}>
-                              {template.transient ? '未保存' : isBuiltinItem ? '内置' : '自定义'}
+                              {template.transient ? t('未保存') : isBuiltinItem ? t('内置') : t('自定义')}
                             </div>
                           </div>
                         </div>
@@ -1100,9 +1101,9 @@ export default function Canvas() {
           ) : (
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="mb-2.5 flex items-center justify-between gap-3">
-                <div className="text-[13px] font-semibold uppercase tracking-[0.12em] text-black">添加节点</div>
+                <div className="text-[13px] font-semibold uppercase tracking-[0.12em] text-black">{t('添加节点')}</div>
                 <div className="rounded-full border border-black/10 bg-transparent px-2.5 py-1 text-[10px] font-semibold text-black">
-                  {AGENT_OPTIONS.length} 项
+                  {AGENT_OPTIONS.length} {t('项')}
                 </div>
               </div>
               <div className="min-h-0 space-y-2 overflow-y-auto pr-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -1141,7 +1142,7 @@ export default function Canvas() {
             transform: hoveredTemplateHint.placement === 'top' ? 'translateY(-100%)' : undefined,
           }}
         >
-          {hoveredTemplateHint.description}
+          {t(hoveredTemplateHint.description)}
         </div>
       )}
 
@@ -1158,14 +1159,14 @@ export default function Canvas() {
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2.5">
               <div className="rounded-full border border-slate-200 bg-transparent px-3 py-2 text-[12px] font-medium text-slate-500">
-                {nodes.length} 节点 · {edges.length} 连接
+                {nodes.length} {t('节点')} · {edges.length} {t('连接')}
               </div>
               <button
                 onClick={() => void handleSaveTemplate()}
                 disabled={!canSaveCurrentTemplate}
                 className="btn-primary h-10 px-5 py-0 text-sm disabled:cursor-not-allowed disabled:opacity-45"
               >
-                保存模板
+                {t('保存模板')}
               </button>
             </div>
           </div>
@@ -1234,22 +1235,22 @@ export default function Canvas() {
             </div>
           ) : (
             <div className="flex h-32 min-w-0 flex-1 items-center justify-center text-sm text-slate-400">
-              暂无模板，请点击左上角新建
+              {t('暂无模板，请点击左上角新建')}
             </div>
           )}
 
           {selectedNode && hasWorkflowContent && (
             <WorkflowInspector
               title={selectedNode.data.displayName || selectedNode.data.agentName}
-              subtitle={`${selectedNode.data.agentType === 'custom' ? '自定义 Agent' : 'OMC 内置 Agent'} · ${selectedNode.id}`}
+              subtitle={`${selectedNode.data.agentType === 'custom' ? t('自定义 Agent') : t('OMC 内置 Agent')} · ${selectedNode.id}`}
               description={selectedNode.data.description}
               statusLabel={selectedNode.data.agentType.toUpperCase()}
               fields={[
                 { label: 'Agent', value: selectedNode.data.agentName },
                 { label: 'Prompt Template', value: selectedNode.data.promptTemplate },
-                { label: '连接关系', value: `${edges.filter(edge => edge.target === selectedNode.id).length} 个上游 · ${edges.filter(edge => edge.source === selectedNode.id).length} 个下游` },
+                { label: t('连接关系'), value: `${edges.filter(edge => edge.target === selectedNode.id).length} ${t('个上游')} · ${edges.filter(edge => edge.source === selectedNode.id).length} ${t('个下游')}` },
               ]}
-              emptyHint="点击画布中的节点查看模板说明、Prompt 模板和连接关系"
+              emptyHint={t('点击画布中的节点查看模板说明、Prompt 模板和连接关系')}
             />
           )}
         </div>
@@ -1261,11 +1262,11 @@ export default function Canvas() {
         top={contextMenu?.top ?? 0}
         onClose={() => setContextMenu(null)}
         items={contextMenu ? [
-          { key: 'view', label: '查看详情', onSelect: () => handleOpenNodeDetails(contextMenu.nodeId) },
-          { key: 'edit', label: '编辑节点', onSelect: () => openEditNodeEditor(contextMenu.nodeId), disabled: isBuiltinTemplate },
-          { key: 'duplicate', label: '复制节点', onSelect: () => handleDuplicateNode(contextMenu.nodeId), disabled: isBuiltinTemplate },
-          { key: 'create-downstream', label: '新增下游节点', onSelect: () => openCreateDownstreamEditor(contextMenu.nodeId), disabled: isBuiltinTemplate },
-          { key: 'delete', label: '删除节点', onSelect: () => handleDeleteNode(contextMenu.nodeId), tone: 'danger', disabled: isBuiltinTemplate },
+          { key: 'view', label: t('查看详情'), onSelect: () => handleOpenNodeDetails(contextMenu.nodeId) },
+          { key: 'edit', label: t('编辑节点'), onSelect: () => openEditNodeEditor(contextMenu.nodeId), disabled: isBuiltinTemplate },
+          { key: 'duplicate', label: t('复制节点'), onSelect: () => handleDuplicateNode(contextMenu.nodeId), disabled: isBuiltinTemplate },
+          { key: 'create-downstream', label: t('新增下游节点'), onSelect: () => openCreateDownstreamEditor(contextMenu.nodeId), disabled: isBuiltinTemplate },
+          { key: 'delete', label: t('删除节点'), onSelect: () => handleDeleteNode(contextMenu.nodeId), tone: 'danger', disabled: isBuiltinTemplate },
         ] : []}
       />
 
@@ -1277,13 +1278,13 @@ export default function Canvas() {
         items={templateContextMenu ? (
           templateContextMenu.templateId.startsWith('builtin-')
             ? [
-                { key: 'duplicate', label: '复制模板', onSelect: () => void handleDuplicateTemplate(templateContextMenu.templateId) },
-                { key: 'builtin-hint', label: '内置模板不可删除或重命名', tone: 'muted', disabled: true },
+                { key: 'duplicate', label: t('复制模板'), onSelect: () => void handleDuplicateTemplate(templateContextMenu.templateId) },
+                { key: 'builtin-hint', label: t('内置模板不可删除或重命名'), tone: 'muted', disabled: true },
               ]
             : [
-                { key: 'duplicate', label: '复制模板', onSelect: () => void handleDuplicateTemplate(templateContextMenu.templateId) },
-                { key: 'rename', label: '重命名模板', onSelect: () => void handleRenameTemplate(templateContextMenu.templateId) },
-                { key: 'delete', label: '删除模板', onSelect: () => handleRequestDeleteTemplate(templateContextMenu.templateId), tone: 'danger' },
+                { key: 'duplicate', label: t('复制模板'), onSelect: () => void handleDuplicateTemplate(templateContextMenu.templateId) },
+                { key: 'rename', label: t('重命名模板'), onSelect: () => void handleRenameTemplate(templateContextMenu.templateId) },
+                { key: 'delete', label: t('删除模板'), onSelect: () => handleRequestDeleteTemplate(templateContextMenu.templateId), tone: 'danger' },
               ]
         ) : []}
       />
@@ -1297,7 +1298,7 @@ export default function Canvas() {
         footer={(
           <>
             <button type="button" onClick={() => setTemplateFormDialog(null)} className="btn-secondary h-10 px-4 py-0 text-sm">
-              取消
+              {t('取消')}
             </button>
             <button
               type="button"
@@ -1305,13 +1306,13 @@ export default function Canvas() {
               disabled={!templateFormDialog?.name.trim() || Boolean(templateNameConflictError)}
               className="btn-primary h-10 px-5 py-0 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {templateFormDialog?.submitLabel ?? '确认'}
+              {templateFormDialog?.submitLabel ?? t('确认')}
             </button>
           </>
         )}
       >
         <div>
-          <div className="mb-1.5 text-[12px] font-medium text-slate-500">模板名称</div>
+          <div className="mb-1.5 text-[12px] font-medium text-slate-500">{t('模板名称')}</div>
           <input
             value={templateFormDialog?.name ?? ''}
             onChange={event => setTemplateFormDialog(prev => prev ? { ...prev, name: event.target.value, error: undefined } : prev)}
@@ -1319,7 +1320,7 @@ export default function Canvas() {
               prev ? { ...prev, name: normalizeTemplateName(prev.name) } : prev
             ))}
             className="field-input"
-            placeholder="例如：全流程开发"
+            placeholder={t('例如：全流程开发')}
             autoFocus
           />
           {(templateNameConflictError || templateFormDialog?.error) && (
@@ -1330,12 +1331,12 @@ export default function Canvas() {
         </div>
 
         <div>
-          <div className="mb-1.5 text-[12px] font-medium text-slate-500">模板描述</div>
+          <div className="mb-1.5 text-[12px] font-medium text-slate-500">{t('模板描述')}</div>
           <textarea
             value={templateFormDialog?.templateDescription ?? ''}
             onChange={event => setTemplateFormDialog(prev => prev ? { ...prev, templateDescription: event.target.value, error: undefined } : prev)}
             className="field-input min-h-[120px] resize-none leading-6"
-            placeholder="简要描述这个模板适合处理什么任务"
+            placeholder={t('简要描述这个模板适合处理什么任务')}
           />
         </div>
       </DialogShell>
@@ -1344,21 +1345,21 @@ export default function Canvas() {
         open={Boolean(templateDeleteDialog)}
         onClose={() => setTemplateDeleteDialog(null)}
         maxWidthClassName="max-w-[420px]"
-        title="删除模板"
-        description={templateDeleteDialog ? `删除后无法恢复，模板“${templateDeleteDialog.name}”会从模板列表中移除。` : undefined}
+        title={t('删除模板')}
+        description={templateDeleteDialog ? t('删除后无法恢复，模板“{name}”会从模板列表中移除。', { name: templateDeleteDialog.name }) : undefined}
         footer={(
           <>
             <button type="button" onClick={() => setTemplateDeleteDialog(null)} className="btn-secondary h-10 px-4 py-0 text-sm">
-              取消
+              {t('取消')}
             </button>
             <button type="button" onClick={() => void handleConfirmDeleteTemplate()} className="btn-primary h-10 bg-rose-600 px-5 py-0 text-sm text-white hover:bg-rose-700">
-              确认删除
+              {t('确认删除')}
             </button>
           </>
         )}
       >
         <div className="rounded-[20px] border border-rose-200 bg-rose-50/80 px-4 py-3 text-[13px] leading-6 text-rose-700">
-          这会删除模板定义，但不会影响已经保存的历史运行记录。
+          {t('这会删除模板定义，但不会影响已经保存的历史运行记录。')}
         </div>
       </DialogShell>
 
@@ -1366,12 +1367,12 @@ export default function Canvas() {
         open={Boolean(draftExitAction)}
         onClose={() => setDraftExitAction(null)}
         maxWidthClassName="max-w-[420px]"
-        title="放弃未保存草稿"
-        description="当前草稿还没有保存，继续操作会丢失这些改动。"
+        title={t('放弃未保存草稿')}
+        description={t('当前草稿还没有保存，继续操作会丢失这些改动。')}
         footer={(
           <>
             <button type="button" onClick={() => setDraftExitAction(null)} className="btn-secondary h-10 px-4 py-0 text-sm">
-              继续编辑
+              {t('继续编辑')}
             </button>
             <button
               type="button"
@@ -1382,13 +1383,13 @@ export default function Canvas() {
               }}
               className="btn-primary h-10 bg-rose-600 px-5 py-0 text-sm text-white hover:bg-rose-700"
             >
-              放弃草稿
+              {t('放弃草稿')}
             </button>
           </>
         )}
       >
         <div className="rounded-[20px] border border-amber-200 bg-amber-50/80 px-4 py-3 text-[13px] leading-6 text-amber-700">
-          建议先点击右上角“保存模板”，否则刷新页面或切换模板后，这份草稿都会消失。
+          {t('建议先点击右上角“保存模板”，否则刷新页面或切换模板后，这份草稿都会消失。')}
         </div>
       </DialogShell>
 
@@ -1398,8 +1399,8 @@ export default function Canvas() {
         top={edgeContextMenu?.top ?? 0}
         onClose={() => setEdgeContextMenu(null)}
         items={edgeContextMenu ? [
-          { key: 'edit-edge', label: '编辑连线', onSelect: () => openEdgeEditor(edgeContextMenu.edgeId), disabled: isBuiltinTemplate },
-          { key: 'delete-edge', label: '删除连线', onSelect: () => handleDeleteEdge(edgeContextMenu.edgeId), tone: 'danger', disabled: isBuiltinTemplate },
+          { key: 'edit-edge', label: t('编辑连线'), onSelect: () => openEdgeEditor(edgeContextMenu.edgeId), disabled: isBuiltinTemplate },
+          { key: 'delete-edge', label: t('删除连线'), onSelect: () => handleDeleteEdge(edgeContextMenu.edgeId), tone: 'danger', disabled: isBuiltinTemplate },
         ] : []}
       />
 
@@ -1407,17 +1408,17 @@ export default function Canvas() {
         open={Boolean(nodeEditor)}
         onClose={() => setNodeEditor(null)}
         maxWidthClassName="max-w-[560px]"
-        title={nodeEditor?.mode === 'edit' ? '编辑节点' : '新增下游节点'}
+        title={nodeEditor?.mode === 'edit' ? t('编辑节点') : t('新增下游节点')}
         description={nodeEditor?.mode === 'edit'
-          ? '调整节点展示名称、Agent 类型和 Prompt。'
-          : `新节点会自动连接到 ${parentNode?.data.displayName || parentNode?.data.agentName || '当前节点'} 后面。`}
+          ? t('调整节点展示名称、Agent 类型和 Prompt。')
+          : t('新节点会自动连接到 {name} 后面。', { name: parentNode?.data.displayName || parentNode?.data.agentName || t('当前节点') })}
         footer={(
           <>
             <button type="button" onClick={() => setNodeEditor(null)} className="btn-secondary h-10 px-4 py-0 text-sm">
-              取消
+              {t('取消')}
             </button>
             <button type="button" onClick={handleConfirmNodeEditor} className="btn-primary h-10 px-5 py-0 text-sm">
-              确认
+              {t('确认')}
             </button>
           </>
         )}
@@ -1425,20 +1426,20 @@ export default function Canvas() {
         {nodeEditor && (
           <>
             <div>
-              <div className="mb-1.5 text-[12px] font-medium text-slate-500">展示名称</div>
+              <div className="mb-1.5 text-[12px] font-medium text-slate-500">{t('展示名称')}</div>
               <input
                 value={nodeEditor.displayName}
                 onChange={event => updateNodeEditor({ displayName: event.target.value })}
                 className="field-input"
-                placeholder="选填，用于替代默认 Agent 名称展示"
+                placeholder={t('选填，用于替代默认 Agent 名称展示')}
               />
             </div>
 
             <div>
-              <div className="mb-1.5 text-[12px] font-medium text-slate-500">Agent 类型</div>
+              <div className="mb-1.5 text-[12px] font-medium text-slate-500">{t('Agent 类型')}</div>
               <div className="grid grid-cols-2 gap-2">
                 {([
-                  { value: 'custom', label: '自定义 Agent' },
+                  { value: 'custom', label: t('自定义 Agent') },
                   { value: 'omc', label: 'OMC Agent' },
                 ] as const).map(option => (
                   <button
@@ -1488,7 +1489,7 @@ export default function Canvas() {
                 value={nodeEditor.promptTemplate}
                 onChange={event => updateNodeEditor({ promptTemplate: event.target.value })}
                 className="field-input min-h-[144px] resize-none leading-6"
-                placeholder="例如：基于 {{globalPrompt}} 继续完成这一部分"
+                placeholder={t('例如：基于 {{globalPrompt}} 继续完成这一部分')}
               />
             </div>
           </>
@@ -1499,12 +1500,12 @@ export default function Canvas() {
         open={Boolean(edgeEditor)}
         onClose={() => setEdgeEditor(null)}
         maxWidthClassName="max-w-[480px]"
-        title="编辑连线"
-        description="支持修改起点和终点，也可以直接拖动线头或线尾快速改线。"
+        title={t('编辑连线')}
+        description={t('支持修改起点和终点，也可以直接拖动线头或线尾快速改线。')}
         footer={(
           <>
             <button type="button" onClick={() => setEdgeEditor(null)} className="btn-secondary h-10 px-4 py-0 text-sm">
-              取消
+              {t('取消')}
             </button>
             <button
               type="button"
@@ -1512,7 +1513,7 @@ export default function Canvas() {
               disabled={Boolean(edgeEditorError)}
               className="btn-primary h-10 px-5 py-0 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             >
-              确认
+              {t('确认')}
             </button>
           </>
         )}
@@ -1520,7 +1521,7 @@ export default function Canvas() {
         {edgeEditor && (
           <>
             <div>
-              <div className="mb-1.5 text-[12px] font-medium text-slate-500">起点节点</div>
+              <div className="mb-1.5 text-[12px] font-medium text-slate-500">{t('起点节点')}</div>
               <select
                 value={edgeEditor.source}
                 onChange={event => setEdgeEditor(prev => prev ? { ...prev, source: event.target.value } : prev)}
@@ -1535,7 +1536,7 @@ export default function Canvas() {
             </div>
 
             <div>
-              <div className="mb-1.5 text-[12px] font-medium text-slate-500">终点节点</div>
+              <div className="mb-1.5 text-[12px] font-medium text-slate-500">{t('终点节点')}</div>
               <select
                 value={edgeEditor.target}
                 onChange={event => setEdgeEditor(prev => prev ? { ...prev, target: event.target.value } : prev)}

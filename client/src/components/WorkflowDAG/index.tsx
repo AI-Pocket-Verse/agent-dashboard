@@ -3,6 +3,7 @@ import { ReactFlow, Background, MarkerType, Position, type Node, type Edge as RF
 import '@xyflow/react/dist/style.css'
 import type { NodeRun, Edge } from '../../types/index'
 import { computeVerticalDagLayout } from '../../lib/workflowLayout'
+import { t } from '../../lib/i18n'
 
 const STATUS_STYLE: Record<string, React.CSSProperties> = {
   completed: { border: '1px solid rgba(31,154,81,0.22)', background: 'rgba(31,154,81,0.08)' },
@@ -52,11 +53,11 @@ export default function WorkflowDAG({ nodes, edges, selectedNodeId, onSelectNode
               <div className="min-w-0">
                 <div className="truncate text-[13px] font-semibold text-[#111114]">{n.displayName || n.agentName}</div>
                 <div className="mt-1 truncate text-[11px] text-slate-500">
-                  {n.output?.trim() || n.logs.find(line => line.trim()) || '等待执行该节点'}
+                  {n.output?.trim() || n.logs.find(line => line.trim()) || t('等待执行该节点')}
                 </div>
               </div>
               <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STATUS_TONE[n.status] ?? STATUS_TONE.pending}`}>
-                {STATUS_LABEL[n.status] ?? n.status}
+                {t(STATUS_LABEL[n.status] ?? n.status)}
               </span>
             </div>
 
@@ -84,7 +85,7 @@ export default function WorkflowDAG({ nodes, edges, selectedNodeId, onSelectNode
                   ))}
                 </span>
               )}
-              {n.logs.length > 0 && <span>{n.logs.length} 条日志</span>}
+              {n.logs.length > 0 && <span>{n.logs.length} {t('条日志')}</span>}
             </div>
           </div>
         ),

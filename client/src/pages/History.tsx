@@ -6,6 +6,7 @@ import { useWorkflowStore } from '../store/workflowStore'
 import { useWsStore } from '../store/wsStore'
 import { formatDateTime } from '../lib/dateFormat'
 import { formatCountdown, getPersistedRateLimitWait } from '../lib/rateLimit'
+import { t } from '../lib/i18n'
 
 const STATUS_BADGE: Record<string, string> = {
   completed: 'border border-[rgba(31,154,81,0.14)] bg-[rgba(31,154,81,0.08)] text-[#0f7a3a]',
@@ -152,7 +153,7 @@ export default function History() {
   const enterRun = (run: WorkflowRun) => {
     const liveRun = isActiveRun(run) ? activeRuns.find(activeRun => activeRun.id === run.id && isActiveRun(activeRun)) : run
     if (!liveRun || !hasCompleteRunSnapshot(liveRun)) {
-      setSnapshotToast(INCOMPLETE_SNAPSHOT_MESSAGE)
+      setSnapshotToast(t(INCOMPLETE_SNAPSHOT_MESSAGE))
       return
     }
 
@@ -199,7 +200,7 @@ export default function History() {
   if (runs.length === 0) {
     return (
       <div className="flex h-full min-h-0 items-center justify-center bg-[rgb(247,248,253)] px-8 text-center text-sm text-slate-500">
-        暂无历史记录
+        {t('暂无历史记录')}
       </div>
     )
   }
@@ -208,34 +209,34 @@ export default function History() {
     <div className="flex h-full min-h-0 overflow-hidden">
       <aside className="flex w-[308px] shrink-0 min-h-0 flex-col border-r border-black/[0.06] bg-[rgb(247,248,253)]">
         <div className="px-4 py-3.5 md:px-5">
-          <h2 className="text-[1.2rem] font-semibold tracking-[-0.04em] text-black">历史记录</h2>
+          <h2 className="text-[1.2rem] font-semibold tracking-[-0.04em] text-black">{t('历史记录')}</h2>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-3.5 pt-4 md:px-5">
           <div className="grid grid-cols-2 gap-2.5">
             <div className="rounded-[18px] border border-slate-200/80 bg-transparent px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">总数</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{t('总数')}</div>
               <div className="mt-2 text-[1.45rem] font-semibold text-black">{stats.total}</div>
             </div>
             <div className="rounded-[18px] border border-slate-200/80 bg-transparent px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">完成</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{t('完成')}</div>
               <div className="mt-2 text-[1.45rem] font-semibold text-emerald-600">{stats.completed}</div>
             </div>
             <div className="rounded-[18px] border border-slate-200/80 bg-transparent px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">运行中</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{t('运行中')}</div>
               <div className="mt-2 text-[1.45rem] font-semibold text-blue-600">{stats.active}</div>
             </div>
             <div className="rounded-[18px] border border-slate-200/80 bg-transparent px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">异常</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{t('异常')}</div>
               <div className="mt-2 text-[1.45rem] font-semibold text-rose-600">{stats.failed}</div>
             </div>
           </div>
 
           <div className="mt-5 flex min-h-0 flex-1 flex-col">
             <div className="mb-2.5 flex items-center justify-between gap-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black">最近项目</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black">{t('最近项目')}</div>
               <div className="rounded-full border border-black/10 bg-transparent px-2.5 py-1 text-[10px] font-semibold text-black">
-                {Math.min(sortedRuns.length, 8)} 项
+                {Math.min(sortedRuns.length, 8)} {t('项')}
               </div>
             </div>
             <div className="min-h-0 space-y-2 overflow-y-auto pr-3">
@@ -253,11 +254,11 @@ export default function History() {
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[rgb(247,248,253)]">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-3.5 md:px-5">
           <div>
-            <h2 className="text-[1.2rem] font-semibold tracking-[-0.04em] text-black">全部运行记录</h2>
-            <p className="mt-0.5 text-[13px] text-slate-500">按时间查看协作历史，快速回顾每次运行的节点、状态和取消原因。</p>
+            <h2 className="text-[1.2rem] font-semibold tracking-[-0.04em] text-black">{t('全部运行记录')}</h2>
+            <p className="mt-0.5 text-[13px] text-slate-500">{t('按时间查看协作历史，快速回顾每次运行的节点、状态和取消原因。')}</p>
           </div>
           <div className="rounded-full border border-slate-200 bg-transparent px-3 py-2 text-[12px] font-medium text-slate-500">
-            最近更新：{formatDateTime(sortedRuns[0].createdAt)}
+            {t('最近更新：')}{formatDateTime(sortedRuns[0].createdAt)}
           </div>
         </div>
 
@@ -283,16 +284,16 @@ export default function History() {
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                       {isStaleRun ? (
                         <span className={`status-pill shrink-0 ${STATUS_BADGE.failed}`}>
-                          异常
+                          {t('异常')}
                         </span>
                       ) : run.status !== 'paused' && (
                         <span className={`status-pill shrink-0 ${STATUS_BADGE[run.status] ?? 'border border-slate-200 bg-slate-50 text-slate-500'}`}>
-                          {STATUS_LABEL[run.status] ?? run.status}
+                          {t(STATUS_LABEL[run.status] ?? run.status)}
                         </span>
                       )}
                       {rateLimitWait && (
                         <span className="status-pill shrink-0 border border-amber-200 bg-amber-50 text-amber-700">
-                          {rateLimitRemaining > 0 ? `继续倒计时 ${formatCountdown(rateLimitRemaining)}` : '可继续'}
+                          {rateLimitRemaining > 0 ? `${t('继续倒计时')} ${formatCountdown(rateLimitRemaining)}` : t('可继续')}
                         </span>
                       )}
                       {isActiveRun(run) && isLiveRun && (
@@ -304,13 +305,13 @@ export default function History() {
                           }}
                           className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-[12px] font-medium text-rose-600 transition hover:border-rose-300"
                         >
-                          终止运行
+                          {t('终止运行')}
                         </button>
                       )}
                     </div>
                   </div>
                   <div className="mt-1 text-sm text-slate-500">
-                    {nodes.length} 个节点 · {formatDateTime(run.createdAt)}
+                    {nodes.length} {t('个节点')} · {formatDateTime(run.createdAt)}
                   </div>
                 </div>
 
@@ -328,8 +329,8 @@ export default function History() {
 
                 {cancelInfo && (
                   <div className="mt-4 rounded-[20px] border border-[rgba(217,48,37,0.12)] bg-[rgba(217,48,37,0.06)] px-4 py-3 text-sm">
-                    <div className="font-medium text-[#b42318]">取消于：{cancelInfo.step}</div>
-                    <div className="mt-1 text-slate-500">原因：{cancelInfo.reason}</div>
+                    <div className="font-medium text-[#b42318]">{t('取消于：')}{cancelInfo.step}</div>
+                    <div className="mt-1 text-slate-500">{t('原因：')}{cancelInfo.reason}</div>
                   </div>
                 )}
               </div>

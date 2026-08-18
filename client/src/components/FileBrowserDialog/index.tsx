@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, type FsItem } from '../../lib/api'
 import DialogShell from '../DialogShell/index'
+import { t } from '../../lib/i18n'
 
 interface Props {
   onSelect: (item: FsItem) => void
@@ -41,7 +42,7 @@ export default function FileBrowserDialog({
   onCancel,
   selectionMode = 'any',
   multiSelect = false,
-  title = '选择本地文件',
+  title,
   subtitle,
 }: Props) {
   const [path, setPath] = useState('')
@@ -63,7 +64,7 @@ export default function FileBrowserDialog({
       setParent(res.parent)
       setItems(res.items)
     } catch {
-      setError('无法读取该目录')
+      setError(t('无法读取该目录'))
     } finally {
       setLoading(false)
     }
@@ -123,12 +124,12 @@ export default function FileBrowserDialog({
     : false
 
   const confirmLabel = multiSelect
-    ? `添加 ${selectedItems.length} 个文件`
+    ? t('添加 {n} 个文件', { n: selectedItems.length })
     : selectionMode === 'file'
-    ? '选择文件'
+    ? t('选择文件')
     : selected
-      ? `选择${selected.type === 'directory' ? '目录' : '文件'}`
-      : '选择当前目录'
+      ? (selected.type === 'directory' ? t('选择目录') : t('选择文件'))
+      : t('选择当前目录')
 
   return (
     <DialogShell
@@ -146,12 +147,12 @@ export default function FileBrowserDialog({
             onClick={() => parent && navigate(parent)}
             disabled={!parent || parent === path}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-transparent text-sm text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-30"
-            title="上级目录"
+            title={t('上级目录')}
           >
             ↑
           </button>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-slate-900">{title}</div>
+            <div className="text-sm font-medium text-slate-900">{title ?? t('选择本地文件')}</div>
             {subtitle && <div className="mt-0.5 text-xs text-slate-500">{subtitle}</div>}
             <div className="mt-1">
               <Breadcrumb path={path} onNavigate={navigate} />
@@ -164,9 +165,9 @@ export default function FileBrowserDialog({
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2 pr-3">
-        {loading && <div className="py-10 text-center text-sm text-slate-500">加载中...</div>}
+        {loading && <div className="py-10 text-center text-sm text-slate-500">{t('加载中...')}</div>}
         {error && <div className="py-10 text-center text-sm text-rose-500">{error}</div>}
-        {!loading && !error && items.length === 0 && <div className="py-10 text-center text-sm text-slate-400">空目录</div>}
+        {!loading && !error && items.length === 0 && <div className="py-10 text-center text-sm text-slate-400">{t('空目录')}</div>}
 
         {!loading && items.map(item => (
           <button
@@ -183,7 +184,7 @@ export default function FileBrowserDialog({
           >
             <span className="w-5 shrink-0 text-center text-base">{item.type === 'directory' ? '📁' : '📄'}</span>
             <span className="truncate">{item.name}</span>
-            {item.type === 'directory' && <span className="ml-auto shrink-0 text-xs opacity-60">双击进入</span>}
+            {item.type === 'directory' && <span className="ml-auto shrink-0 text-xs opacity-60">{t('双击进入')}</span>}
           </button>
         ))}
       </div>
@@ -193,12 +194,12 @@ export default function FileBrowserDialog({
           {multiSelect
             ? (
               selectedItems.length > 0
-                ? <><span className="font-medium text-slate-800">已选 {selectedItems.length} 项：</span>{selectedItems.map(item => item.path).join('，')}</>
-                : <span>未选择 - 点击文件选择，双击目录进入</span>
+                ? <><span className="font-medium text-slate-800">{t('已选 {n} 项：', { n: selectedItems.length })}</span>{selectedItems.map(item => item.path).join('，')}</>
+                : <span>{t('未选择 - 点击文件选择，双击目录进入')}</span>
             )
             : selected
-            ? <><span className="font-medium text-slate-800">已选：</span>{selected.path}</>
-            : <span>{selectionMode === 'file' ? '未选择 - 点击文件选择，双击目录进入' : '未选择 - 点击选择文件或目录，双击进入目录'}</span>
+            ? <><span className="font-medium text-slate-800">{t('已选：')}</span>{selected.path}</>
+            : <span>{selectionMode === 'file' ? t('未选择 - 点击文件选择，双击目录进入') : t('未选择 - 点击选择文件或目录，双击进入目录')}</span>
           }
         </div>
         <div className="flex flex-wrap gap-2">
@@ -210,10 +211,10 @@ export default function FileBrowserDialog({
             disabled={selected?.type !== 'directory'}
             className="btn-secondary disabled:cursor-not-allowed disabled:opacity-45"
           >
-            进入
+            {t('进入')}
           </button>
           <button onClick={onCancel} className="btn-ghost">
-            取消
+            {t('取消')}
           </button>
         </div>
       </div>

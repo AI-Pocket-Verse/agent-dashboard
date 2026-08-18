@@ -15,6 +15,7 @@ A web dashboard for orchestrating multiple Claude Code agents as DAG workflows. 
 - **AI agent selection** — describe a task and let the Anthropic API pick and wire the right agents for you.
 - **Auto-fix loop** — when a `code-reviewer` node finds blocking issues, the dashboard offers up to 3 automatic fix rounds routed to the right agent.
 - **Run history & workspace browser** — inspect every run's files, preview generated HTML prototypes, and page through logs.
+- **Bilingual UI** — follows your system language (Simplified Chinese / English) out of the box, with an in-app switcher (bottom of the sidebar) to change it live.
 - **Optional password auth** — leave `DASHBOARD_SECRET` empty for zero-friction local use (no login, nothing to remember); set it and one password protects both the HTTP API (Bearer, timing-safe) and the WebSocket channel via a login gate. Always set it for any deployment reachable by others.
 
 ## Requirements

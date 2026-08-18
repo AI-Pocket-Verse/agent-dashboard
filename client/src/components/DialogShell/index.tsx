@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { t } from '../../lib/i18n'
 
 interface Props {
   open: boolean
@@ -54,7 +55,7 @@ export default function DialogShell({
                   type="button"
                   onClick={onClose}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-black/10 text-slate-500 transition hover:border-black/20 hover:text-black"
-                  aria-label="关闭"
+                  aria-label={t('关闭')}
                 >
                   <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4">
                     <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

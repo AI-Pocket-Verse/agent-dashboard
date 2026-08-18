@@ -4,6 +4,7 @@ import type { TaskMode } from './ModeSelector'
 import type { FsItem } from '../../lib/api'
 import { getAgentDisplayDescription } from '../../lib/agentDescriptions'
 import FileBrowserDialog from '../FileBrowserDialog/index'
+import { t } from '../../lib/i18n'
 
 interface SubmitParams {
   mode: TaskMode
@@ -131,7 +132,7 @@ function SelectionChip({
                 ? 'text-emerald-400 hover:bg-emerald-100 hover:text-emerald-700'
                 : 'text-slate-400 hover:text-slate-700'
         }`}
-        aria-label={`移除 ${label}`}
+        aria-label={`${t('移除')} ${label}`}
       >
         ×
       </button>
@@ -287,7 +288,7 @@ function formatAttachmentSize(size: number) {
 }
 
 function getAttachmentMentionLabel(item: AttachmentItem) {
-  return item.mime.startsWith('image/') ? '图片' : getAttachmentBadgeLabel(item.name, item.mime)
+  return item.mime.startsWith('image/') ? t('图片') : getAttachmentBadgeLabel(item.name, item.mime)
 }
 
 function findAttachmentMention(value: string, cursor: number): Omit<AttachmentMentionState, 'activeIndex'> | null {
@@ -365,7 +366,7 @@ function renderPromptPartsHtml(parts: PromptPart[]) {
       ` contenteditable="false"`,
       ` class="group relative ml-1.5 inline-flex min-h-7 max-w-[220px] -translate-y-[1px] items-center rounded-full border border-slate-300 bg-slate-100 px-3 py-1.5 text-[0.82rem] font-medium leading-none text-slate-800 align-middle shadow-none transition hover:border-slate-400 hover:bg-slate-200">`,
       `<span class="truncate">${escapeHtml(part.name)}</span>`,
-      `<button type="button" tabindex="-1" contenteditable="false" data-remove-prompt-attachment="${escapeHtml(part.id)}" aria-label="删除引用 ${escapeHtml(part.name)}" class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] leading-none text-slate-500 opacity-0 ring-1 ring-slate-300 transition hover:text-slate-900 group-hover:opacity-100">×</button>`,
+      `<button type="button" tabindex="-1" contenteditable="false" data-remove-prompt-attachment="${escapeHtml(part.id)}" aria-label="${t('删除引用')} ${escapeHtml(part.name)}" class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] leading-none text-slate-500 opacity-0 ring-1 ring-slate-300 transition hover:text-slate-900 group-hover:opacity-100">×</button>`,
       `</span>`,
       `<span data-prompt-mention-spacer="true" contenteditable="false" aria-hidden="true" class="inline-block w-2 align-middle">&nbsp;</span>`,
     ].join('')
@@ -577,14 +578,14 @@ function readFileAsBase64(file: File): Promise<string> {
     reader.onload = () => {
       const result = reader.result
       if (typeof result !== 'string') {
-        reject(new Error(`无法读取附件 ${file.name}`))
+        reject(new Error(t('无法读取附件 {name}', { name: file.name })))
         return
       }
 
       const [, base64 = ''] = result.split(',', 2)
       resolve(base64)
     }
-    reader.onerror = () => reject(new Error(`无法读取附件 ${file.name}`))
+    reader.onerror = () => reject(new Error(t('无法读取附件 {name}', { name: file.name })))
     reader.readAsDataURL(file)
   })
 }
@@ -1056,14 +1057,14 @@ export default function TaskForm({
       : promptValueRef.current
 
     if (mode === 'template' && !templateId) {
-      setLocalError('请选择一个模板')
+      setLocalError(t('请选择一个模板'))
       setPendingTemplateId(templateId)
       setIsTemplateModalOpen(true)
       return
     }
 
     if (mode === 'manual' && selectedAgents.length === 0) {
-      setLocalError('请至少选择一个 Agent')
+      setLocalError(t('请至少选择一个 Agent'))
       setPendingSelectedAgents(selectedAgents)
       setIsAgentModalOpen(true)
       return
@@ -1102,7 +1103,7 @@ export default function TaskForm({
       setIsContextModalOpen(false)
       setAttachmentMention(null)
     } catch (error) {
-      setLocalError(error instanceof Error ? error.message : '提交失败，请重试')
+      setLocalError(error instanceof Error ? error.message : t('提交失败，请重试'))
     }
   }
 
@@ -1149,7 +1150,7 @@ export default function TaskForm({
                       type="button"
                       onClick={() => handleRemoveAttachment(item.id)}
                       className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-transparent text-[11px] text-slate-400 opacity-0 transition hover:text-slate-700 group-hover:opacity-100"
-                      aria-label={`删除 ${item.name}`}
+                      aria-label={`${t('删除')} ${item.name}`}
                     >
                       ×
                     </button>
@@ -1172,7 +1173,7 @@ export default function TaskForm({
             {isAttachmentMentionOpen && (
               <div data-attachment-mention-popover="true" className="absolute bottom-full left-2 right-2 z-30 mb-2 overflow-hidden rounded-[22px] border border-black/[0.10] bg-white/95 p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur">
                 <div className="px-3 pb-1.5 pt-1 text-[11px] font-medium tracking-[0.02em] text-slate-500">
-                  引用已上传对象
+                  {t('引用已上传对象')}
                 </div>
                 {attachmentMentionItems.length > 0 ? (
                   <div className="max-h-[236px] overflow-y-auto">
@@ -1221,7 +1222,7 @@ export default function TaskForm({
                   </div>
                 ) : (
                   <div className="rounded-[16px] px-3 py-3 text-sm text-slate-500">
-                    暂无可引用的图片或文件
+                    {t('暂无可引用的图片或文件')}
                   </div>
                 )}
               </div>
@@ -1230,7 +1231,7 @@ export default function TaskForm({
             <div className="relative">
               {!promptHasContent && (
                 <div className="pointer-events-none absolute inset-x-0 top-0 px-2 text-[0.95rem] leading-7 tracking-[-0.025em] text-slate-400 md:text-[1.04rem] md:leading-8">
-                  说说你的想法...
+                  {t('说说你的想法...')}
                 </div>
               )}
               <div
@@ -1263,12 +1264,12 @@ export default function TaskForm({
                   ? 'border-slate-300 bg-transparent text-slate-900 shadow-none'
                   : 'border-slate-200 bg-transparent text-slate-500 hover:border-slate-300 hover:text-slate-900'
               }`}
-              aria-label="添加代码路径"
+              aria-label={t('添加代码路径')}
             >
               +
             </button>
             <ToolbarChip
-              label="模板"
+              label={t('模板')}
               icon={<TemplateIcon />}
               active={isTemplateModalOpen || (mode === 'template' && !!templateId)}
               disabled={hasAgentSelection}
@@ -1282,7 +1283,7 @@ export default function TaskForm({
               onClick={() => toggleModePanel('manual', 'manual')}
             />
             <ToolbarChip
-              label={`代码${codeContext.length > 0 ? ` ${codeContext.length}` : ''}`}
+              label={`${t('代码')}${codeContext.length > 0 ? ` ${codeContext.length}` : ''}`}
               icon={<ContextIcon />}
               active={isContextModalOpen || !!pendingContext || codeContext.length > 0}
               onClick={toggleContextModal}
@@ -1310,13 +1311,13 @@ export default function TaskForm({
           <div className="w-full max-w-[760px] rounded-[34px] border border-black/[0.08] bg-[rgb(247,248,253)] p-5 shadow-none md:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-[1.25rem] font-semibold tracking-[-0.03em] text-slate-950">模板选择</h3>
+                <h3 className="text-[1.25rem] font-semibold tracking-[-0.03em] text-slate-950">{t('模板选择')}</h3>
               </div>
               <button
                 type="button"
                 onClick={handleCloseTemplateModal}
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-transparent text-slate-400 transition hover:border-slate-300 hover:text-slate-700"
-                aria-label="关闭模板弹窗"
+                aria-label={t('关闭模板弹窗')}
               >
                 ×
               </button>
@@ -1336,18 +1337,18 @@ export default function TaskForm({
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <div className={`text-sm ${pendingTemplateId === template.id ? 'font-semibold' : 'font-medium'}`}>{template.name}</div>
+                      <div className={`text-sm ${pendingTemplateId === template.id ? 'font-semibold' : 'font-medium'}`}>{t(template.name)}</div>
                       <div className={`mt-1 text-xs leading-5 ${
                         pendingTemplateId === template.id ? 'text-slate-600' : 'text-slate-500'
                       }`}>
-                        {template.description?.trim() || '未填写模板描述'}
+                        {template.description?.trim() ? t(template.description.trim()) : t('未填写模板描述')}
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <div className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                         pendingTemplateId === template.id ? 'bg-transparent text-slate-700' : 'bg-transparent text-slate-500'
                       }`}>
-                        {template.nodes.length} 节点
+                        {template.nodes.length} {t('节点')}
                       </div>
                       <div className={`flex h-5 w-5 items-center justify-center rounded-full border text-[11px] ${
                         pendingTemplateId === template.id
@@ -1364,7 +1365,7 @@ export default function TaskForm({
 
             <div className="mt-5 flex items-center justify-between gap-3">
               <div className="min-h-[20px] text-sm text-slate-500">
-                {pendingTemplate ? `已选中：${pendingTemplate.name}` : '暂未选择模板'}
+                {pendingTemplate ? `${t('已选中：')}${t(pendingTemplate.name)}` : t('暂未选择模板')}
               </div>
               <div className="flex items-center gap-2.5">
                 <button
@@ -1372,14 +1373,14 @@ export default function TaskForm({
                   onClick={handleCloseTemplateModal}
                   className="rounded-full border border-slate-200 bg-transparent px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
                 >
-                  取消
+                  {t('取消')}
                 </button>
                 <button
                   type="button"
                   onClick={handleConfirmTemplate}
                   className="rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
                 >
-                  确认
+                  {t('确认')}
                 </button>
               </div>
             </div>
@@ -1392,20 +1393,20 @@ export default function TaskForm({
           <div className="w-full max-w-[760px] rounded-[34px] border border-black/[0.08] bg-[rgb(247,248,253)] p-5 shadow-none md:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-[1.25rem] font-semibold tracking-[-0.03em] text-slate-950">Agent 选择</h3>
+                <h3 className="text-[1.25rem] font-semibold tracking-[-0.03em] text-slate-950">{t('Agent 选择')}</h3>
               </div>
               <button
                 type="button"
                 onClick={handleCloseAgentModal}
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-transparent text-slate-400 transition hover:border-slate-300 hover:text-slate-700"
-                aria-label="关闭 Agent 弹窗"
+                aria-label={t('关闭 Agent 弹窗')}
               >
                 ×
               </button>
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-500">
-              <span className="rounded-full border border-slate-200 bg-transparent px-3 py-1">自定义 {pendingCustomCount}</span>
+              <span className="rounded-full border border-slate-200 bg-transparent px-3 py-1">{t('自定义')} {pendingCustomCount}</span>
               <span className="rounded-full border border-slate-200 bg-transparent px-3 py-1">OMC {pendingOmcCount}</span>
             </div>
 
@@ -1415,7 +1416,7 @@ export default function TaskForm({
                 return (
                   <div key={type} className="rounded-[24px] border border-slate-200 bg-transparent p-4 shadow-none">
                     <div className="mb-3 text-sm font-semibold text-slate-900">
-                      {type === 'custom' ? '自定义 Agent' : 'OMC 内置 Agent'}
+                      {type === 'custom' ? t('自定义 Agent') : t('OMC 内置 Agent')}
                     </div>
                     <div className="max-h-64 space-y-2 overflow-y-auto pr-3">
                       {pool.map(agent => {
@@ -1457,7 +1458,7 @@ export default function TaskForm({
 
             <div className="mt-5 flex items-center justify-between gap-3">
               <div className="min-h-[20px] text-sm text-slate-500">
-                {pendingSelectedAgents.length > 0 ? `已选中 ${pendingSelectedAgents.length} 个 Agent` : '暂未选择 Agent'}
+                {pendingSelectedAgents.length > 0 ? t('已选中 {n} 个 Agent', { n: pendingSelectedAgents.length }) : t('暂未选择 Agent')}
               </div>
               <div className="flex items-center gap-2.5">
                 <button
@@ -1465,14 +1466,14 @@ export default function TaskForm({
                   onClick={handleCloseAgentModal}
                   className="rounded-full border border-slate-200 bg-transparent px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
                 >
-                  取消
+                  {t('取消')}
                 </button>
                 <button
                   type="button"
                   onClick={handleConfirmAgentSelection}
                   className="rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
                 >
-                  确认
+                  {t('确认')}
                 </button>
               </div>
             </div>
@@ -1485,13 +1486,13 @@ export default function TaskForm({
           <div className="w-full max-w-[760px] rounded-[34px] border border-black/[0.08] bg-[rgb(247,248,253)] p-5 shadow-none md:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-[1.25rem] font-semibold tracking-[-0.03em] text-slate-950">代码选择</h3>
+                <h3 className="text-[1.25rem] font-semibold tracking-[-0.03em] text-slate-950">{t('代码选择')}</h3>
               </div>
               <button
                 type="button"
                 onClick={handleCloseContextModal}
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-transparent text-slate-400 transition hover:border-slate-300 hover:text-slate-700"
-                aria-label="关闭代码弹窗"
+                aria-label={t('关闭代码弹窗')}
               >
                 ×
               </button>
@@ -1499,13 +1500,13 @@ export default function TaskForm({
 
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
               <div className="text-sm text-slate-500">
-                {codeContext.length > 0 ? `已添加 ${codeContext.length} 项代码路径` : '还没有添加代码路径'}
+                {codeContext.length > 0 ? t('已添加 {n} 项代码路径', { n: codeContext.length }) : t('还没有添加代码路径')}
               </div>
               <button
                 onClick={() => setBrowserPurpose('context')}
                 className="rounded-full border border-slate-200 bg-transparent px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
               >
-                + 添加路径
+                {t('+ 添加路径')}
               </button>
             </div>
 
@@ -1517,12 +1518,12 @@ export default function TaskForm({
                     value={contextDesc}
                     onChange={e => setContextDesc(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleAddContext()}
-                    placeholder="补充说明（可选）..."
+                    placeholder={t('补充说明（可选）...')}
                     className="field-input mt-3 text-sm"
                   />
                   <div className="mt-3 flex gap-2">
-                    <button onClick={handleAddContext} className="btn-primary flex-1">添加</button>
-                    <button onClick={() => { setPendingContext(null); setContextDesc('') }} className="btn-secondary">取消</button>
+                    <button onClick={handleAddContext} className="btn-primary flex-1">{t('添加')}</button>
+                    <button onClick={() => { setPendingContext(null); setContextDesc('') }} className="btn-secondary">{t('取消')}</button>
                   </div>
                 </div>
               )}
@@ -1537,14 +1538,14 @@ export default function TaskForm({
                         {ctx.description && <div className="mt-1 text-xs text-slate-500">{ctx.description}</div>}
                       </div>
                       <button onClick={() => handleRemoveContext(index)} className="text-xs font-medium text-slate-400 transition hover:text-rose-500">
-                        移除
+                        {t('移除')}
                       </button>
                     </div>
                   ))}
                 </div>
               ) : !pendingContext ? (
                 <div className="rounded-[22px] border border-dashed border-slate-300 bg-transparent px-4 py-10 text-center text-sm text-slate-400">
-                  还没有添加代码路径
+                  {t('还没有添加代码路径')}
                 </div>
               ) : null}
             </div>
@@ -1555,7 +1556,7 @@ export default function TaskForm({
                 onClick={handleCloseContextModal}
                 className="rounded-full border border-slate-200 bg-transparent px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
               >
-                完成
+                {t('完成')}
               </button>
             </div>
           </div>
@@ -1573,8 +1574,8 @@ export default function TaskForm({
           onSelect={handleSelectContext}
           onCancel={handleCloseBrowser}
           selectionMode="any"
-          title="选择代码路径"
-          subtitle="支持单选文件或目录。"
+          title={t('选择代码路径')}
+          subtitle={t('支持单选文件或目录。')}
         />
       )}
     </section>

@@ -10,6 +10,7 @@ import { BUILTIN_TEMPLATES } from '../lib/builtinTemplates'
 import type { WorkflowTemplate } from '../types/index'
 import type { TaskMode } from '../components/TaskForm/ModeSelector'
 import type { AgentInfo, CodeContext, TaskAttachment } from '../types/index'
+import { t } from '../lib/i18n'
 
 interface SubmitParams {
   mode: TaskMode
@@ -90,7 +91,7 @@ export default function Dashboard() {
       if (mode === 'manual') {
         const chosen = selectedAgents ?? []
         if (chosen.length === 0) {
-          setError('请至少选择一个 Agent')
+          setError(t('请至少选择一个 Agent'))
           return
         }
         if (chosen.length === 1) {
@@ -134,7 +135,7 @@ export default function Dashboard() {
       } else if (mode === 'template') {
         const template = templates.find(t => t.id === templateId)
         if (!template) {
-          setError('请选择一个模板')
+          setError(t('请选择一个模板'))
           return
         }
         send({
@@ -172,7 +173,7 @@ export default function Dashboard() {
         },
       })
     } catch (e) {
-      setError(e instanceof Error ? e.message : '发布失败，请重试')
+      setError(e instanceof Error ? e.message : t('发布失败，请重试'))
     } finally {
       setSubmitting(false)
     }

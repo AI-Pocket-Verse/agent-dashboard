@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 export interface RateLimitWait {
   resetAt: number
   timeZone: string
@@ -131,7 +133,7 @@ export function getPersistedRateLimitWait(runId: string, nodeId: string, text: s
 
 export function formatCountdown(remainingMs: number) {
   const totalSeconds = Math.max(0, Math.ceil(remainingMs / 1000))
-  if (totalSeconds === 0) return '可继续'
+  if (totalSeconds === 0) return t('可继续')
 
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)

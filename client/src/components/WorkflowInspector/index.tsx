@@ -1,3 +1,5 @@
+import { t } from '../../lib/i18n'
+
 interface InspectorField {
   label: string
   value: string
@@ -31,7 +33,7 @@ export default function WorkflowInspector({
   statusTone = 'neutral',
   fields = [],
   logs = [],
-  emptyHint = '点击一个节点查看详情',
+  emptyHint,
 }: Props) {
   return (
     <aside className="flex h-full w-[320px] shrink-0 flex-col border-l border-black/[0.06] bg-[rgb(247,248,253)]">
@@ -52,13 +54,13 @@ export default function WorkflowInspector({
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pr-5">
         {!description && fields.length === 0 && logs.length === 0 ? (
           <div className="flex h-full items-center justify-center text-center text-sm text-slate-400">
-            {emptyHint}
+            {emptyHint ?? t('点击一个节点查看详情')}
           </div>
         ) : (
           <div className="space-y-5">
             {description && (
               <section>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">说明</div>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{t('说明')}</div>
                 <div className="whitespace-pre-wrap break-words rounded-[18px] border border-slate-200/80 px-4 py-3 text-sm leading-6 text-slate-600">
                   {description}
                 </div>
@@ -67,7 +69,7 @@ export default function WorkflowInspector({
 
             {fields.length > 0 && (
               <section>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">详情</div>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{t('详情')}</div>
                 <div className="space-y-2">
                   {fields.map(field => (
                     <div key={field.label} className="rounded-[18px] border border-slate-200/80 px-4 py-3">
@@ -81,7 +83,7 @@ export default function WorkflowInspector({
 
             {logs.length > 0 && (
               <section>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">最近日志</div>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{t('最近日志')}</div>
                 <div className="max-h-[420px] overflow-y-auto rounded-[18px] border border-slate-200/80 px-4 py-3 font-mono text-[12px] leading-6 text-slate-600">
                   {logs.map((line, index) => (
                     <div key={`${index}-${line.slice(0, 24)}`} className="whitespace-pre-wrap break-words">

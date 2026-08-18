@@ -15,6 +15,7 @@ import {
   useStore,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { t } from '../../lib/i18n'
 
 const EDGE_STROKE = 'rgba(68,68,74,0.36)'
 const EDGE_MARKER_COLOR = 'rgba(52,52,58,0.48)'
@@ -328,11 +329,11 @@ const AgentCanvasNode = memo(function AgentCanvasNode({
         className={`workflow-node-handle workflow-node-handle-source ${selected ? 'workflow-node-handle-selected' : ''}`}
       />
 
-      {(data.helperText ?? '从下方圆点拖动连线') !== '' && (
+      {(data.helperText ?? t('从下方圆点拖动连线')) !== '' && (
         <div className={`pointer-events-none absolute left-1/2 top-[calc(100%+18px)] -translate-x-1/2 rounded-full border border-black/10 bg-white/95 px-2.5 py-1 text-[10px] font-medium text-slate-500 shadow-sm transition ${
           selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
         }`}>
-          {data.helperText ?? '从下方圆点拖动连线'}
+          {data.helperText ?? t('从下方圆点拖动连线')}
         </div>
       )}
     </div>

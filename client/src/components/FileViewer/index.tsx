@@ -14,6 +14,7 @@ import java from 'react-syntax-highlighter/dist/esm/languages/hljs/java'
 import sql from 'react-syntax-highlighter/dist/esm/languages/hljs/sql'
 import yaml from 'react-syntax-highlighter/dist/esm/languages/hljs/yaml'
 import MarkdownText from '../MarkdownText/index'
+import { t } from '../../lib/i18n'
 
 SyntaxHighlighter.registerLanguage('typescript', typescript)
 SyntaxHighlighter.registerLanguage('javascript', javascript)
@@ -66,7 +67,7 @@ export default function FileViewer({ path, content, isBinary, truncated, rawUrl 
   if (truncated) {
     return (
       <div className="p-4 text-sm text-slate-500">
-        文件超过 1 MB，暂不展示完整内容。
+        {t('文件超过 1 MB，暂不展示完整内容。')}
       </div>
     )
   }
@@ -86,7 +87,7 @@ export default function FileViewer({ path, content, isBinary, truncated, rawUrl 
   if (isBinary) {
     return (
       <div className="p-4 text-sm text-slate-500">
-        这是二进制文件，暂不展示内容。
+        {t('这是二进制文件，暂不展示内容。')}
       </div>
     )
   }

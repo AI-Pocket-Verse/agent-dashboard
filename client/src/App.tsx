@@ -2,6 +2,7 @@ import { Routes, Route, NavLink } from 'react-router-dom'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useWebSocket } from './hooks/useWebSocket'
 import { getToken } from './lib/auth'
+import { t, useLocaleStore, type LocaleSetting } from './lib/i18n'
 import { useAgentStore } from './store/agentStore'
 import { useWorkflowStore } from './store/workflowStore'
 import { useWsStore } from './store/wsStore'
@@ -191,9 +192,29 @@ const NAV_ITEMS = [
   { to: '/history', label: '历史', Icon: HistoryIcon },
 ]
 
+const LOCALE_OPTIONS: Array<{ value: LocaleSetting; label: string }> = [
+  { value: 'system', label: '跟随系统' },
+  { value: 'zh', label: '简体中文' },
+  { value: 'en', label: 'English' },
+]
+
+function LanguageIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-[22px] w-[22px] text-current">
+      <circle cx="12" cy="12" r="8.2" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M3.8 12h16.4M12 3.8c-2.3 2.4-3.4 5.2-3.4 8.2s1.1 5.8 3.4 8.2c2.3-2.4 3.4-5.2 3.4-8.2s-1.1-5.8-3.4-8.2Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export default function App() {
   const [copyMenu, setCopyMenu] = useState<CopyMenuState | null>(null)
   const [copyToastVisible, setCopyToastVisible] = useState(false)
+  const [langMenu, setLangMenu] = useState<{ left: number; top: number } | null>(null)
+  // Subscribing here re-renders the whole tree on language change, so plain t() stays fresh everywhere.
+  const localeSetting = useLocaleStore(s => s.setting)
+  useLocaleStore(s => s.locale)
+  const setLocaleSetting = useLocaleStore(s => s.setSetting)
   const { setAgents, setAgentStatus } = useAgentStore()
   const { upsertRun, appendLog, setNodeStatus, setRunStatus, completeRun, failRun, setPendingConfirm, setPendingAutoFix, setFileActivity, clearActiveFiles } = useWorkflowStore()
   const setSend = useWsStore(s => s.setSend)
@@ -352,13 +373,26 @@ export default function App() {
                       <Icon active={isActive} />
                     </span>
                     <span className="text-[10px] font-medium leading-none tracking-[-0.02em] text-[rgb(25,29,38)]">
-                      {label}
+                      {t(label)}
                     </span>
                   </>
                 )}
               </NavLink>
             ))}
           </nav>
+          <button
+            type="button"
+            aria-label={t('语言')}
+            title={t('语言')}
+            onClick={event => {
+              const rect = event.currentTarget.getBoundingClientRect()
+              // Open upward: the button sits at the bottom of the sidebar
+              setLangMenu({ left: rect.right + 6, top: Math.max(16, rect.bottom - 132) })
+            }}
+            className="mt-auto flex h-[36px] w-[36px] items-center justify-center rounded-[12px] text-[rgb(25,29,38)] opacity-60 transition hover:bg-white hover:opacity-100"
+          >
+            <LanguageIcon />
+          </button>
         </aside>
 
         <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
@@ -370,6 +404,21 @@ export default function App() {
           </Routes>
         </main>
       </div>
+      <ContextMenu
+        open={langMenu !== null}
+        left={langMenu?.left ?? 0}
+        top={langMenu?.top ?? 0}
+        widthClassName="w-[140px]"
+        onClose={() => setLangMenu(null)}
+        items={LOCALE_OPTIONS.map(option => ({
+          key: option.value,
+          label: `${localeSetting === option.value ? '✓ ' : ''}${t(option.label)}`,
+          onSelect: () => {
+            setLocaleSetting(option.value)
+            setLangMenu(null)
+          },
+        }))}
+      />
       <ContextMenu
         open={copyMenu !== null}
         left={copyMenu?.left ?? 0}
@@ -389,7 +438,7 @@ export default function App() {
           role="status"
           className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full border border-emerald-200 bg-white/95 px-4 py-2 text-sm font-medium text-emerald-700 shadow-[0_18px_40px_rgba(15,23,42,0.16)] backdrop-blur"
         >
-          复制成功
+          {t('复制成功')}
         </div>
       ) : null}
     </div>

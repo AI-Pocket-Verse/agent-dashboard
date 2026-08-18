@@ -1,3 +1,5 @@
+import { t } from '../../lib/i18n'
+
 export type TaskMode = 'ai' | 'template' | 'manual'
 
 interface Props {
@@ -26,9 +28,9 @@ export default function ModeSelector({ mode, onChange }: Props) {
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <div className="text-sm font-semibold tracking-[-0.02em]">{item.label}</div>
+            <div className="text-sm font-semibold tracking-[-0.02em]">{t(item.label)}</div>
             <div className={`mt-1 text-xs leading-5 ${active ? 'text-slate-500' : 'text-slate-400'}`}>
-              {item.description}
+              {t(item.description)}
             </div>
           </button>
         )

@@ -10,6 +10,7 @@ import FileViewer from '../components/FileViewer/index'
 import ConfirmCard from '../components/ConfirmCard/index'
 import WorkflowInspector from '../components/WorkflowInspector/index'
 import MarkdownText from '../components/MarkdownText/index'
+import { t } from '../lib/i18n'
 import {
   WORKFLOW_EDGE_MARKER_COLOR,
   WORKFLOW_EDGE_STROKE,
@@ -81,11 +82,11 @@ const RUN_NODE_BADGE_CLASS: Record<NodeStatus, string> = {
 }
 
 function getRoundStatusLabel(status: WorkflowRun['status']) {
-  return status === 'running' ? '执行中'
-    : status === 'paused' ? '等待确认'
-      : status === 'completed' ? '已完成'
-        : status === 'failed' ? '失败'
-          : '等待中'
+  return status === 'running' ? t('执行中')
+    : status === 'paused' ? t('等待确认')
+      : status === 'completed' ? t('已完成')
+        : status === 'failed' ? t('失败')
+          : t('等待中')
 }
 
 function formatElapsedDuration(durationMs: number) {
@@ -102,8 +103,8 @@ function formatElapsedDuration(durationMs: number) {
 
 function getNodeElapsedLabel(node: NodeRun, now: number) {
   if (!node.startedAt) return null
-  if (node.status === 'running') return `已运行 ${formatElapsedDuration(now - node.startedAt)}`
-  if (node.finishedAt) return `耗时 ${formatElapsedDuration(node.finishedAt - node.startedAt)}`
+  if (node.status === 'running') return `${t('已运行')} ${formatElapsedDuration(now - node.startedAt)}`
+  if (node.finishedAt) return `${t('耗时')} ${formatElapsedDuration(node.finishedAt - node.startedAt)}`
   return null
 }
 
@@ -152,14 +153,14 @@ function EmptyState({ hint }: { hint?: string }) {
             <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.3" />
             <path d="M8 5v6M5 8h6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
           </svg>
-          {hint ?? '复杂任务改不好，试试 Agent 模式'}
+          {hint ?? t('复杂任务改不好，试试 Agent 模式')}
         </div>
         <div className="flex items-center justify-center gap-1.5 text-[13px] text-slate-400">
           <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0">
             <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
             <path d="M5 7.5h6M5 10h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
           </svg>
-          可以上传图片复刻
+          {t('可以上传图片复刻')}
         </div>
       </div>
     </div>
@@ -212,13 +213,13 @@ function CodeTab({ run, onPreviewFile }: { run: WorkflowRun | null; onPreviewFil
         setEntries(res.entries)
         setRoot(res.root)
         if (res.entries.length === 0) {
-          setError(currentPath ? '此目录为空' : '暂无 Agent 生成或修改的代码文件')
+          setError(currentPath ? t('此目录为空') : t('暂无 Agent 生成或修改的代码文件'))
         }
       })
       .catch(() => {
         if (cancelled) return
         setEntries([])
-        setError('还没有找到这个任务的运行目录')
+        setError(t('还没有找到这个任务的运行目录'))
       })
       .finally(() => {
         if (!cancelled) setIsLoadingFiles(false)
@@ -253,7 +254,7 @@ function CodeTab({ run, onPreviewFile }: { run: WorkflowRun | null; onPreviewFil
           path: file.path,
           size: file.size,
           modifiedAt: file.modifiedAt,
-          content: '无法读取该文件内容',
+          content: t('无法读取该文件内容'),
           isBinary: false,
           truncated: false,
         })
@@ -270,7 +271,7 @@ function CodeTab({ run, onPreviewFile }: { run: WorkflowRun | null; onPreviewFil
   }
 
   const breadcrumbs = useMemo(() => {
-    const crumbs: Array<{ name: string; path: string }> = [{ name: '根目录', path: '' }]
+    const crumbs: Array<{ name: string; path: string }> = [{ name: t('根目录'), path: '' }]
     if (currentPath) {
       const parts = currentPath.split('/').filter(Boolean)
       let acc = ''
@@ -288,7 +289,7 @@ function CodeTab({ run, onPreviewFile }: { run: WorkflowRun | null; onPreviewFil
     <div className="grid h-full min-h-[620px] grid-cols-[320px_minmax(0,1fr)] overflow-hidden">
       <div className="flex min-h-0 min-w-0 flex-col border-r border-black/[0.06]">
         <div className="border-b border-black/[0.06] px-4 py-3">
-          <div className="text-sm font-semibold text-slate-900">代码文件</div>
+          <div className="text-sm font-semibold text-slate-900">{t('代码文件')}</div>
           <div className="mt-1 truncate font-mono text-[11px] text-slate-400" title={root}>
             {root || `workspace/runs/${runId}/repo`}
           </div>
@@ -313,11 +314,11 @@ function CodeTab({ run, onPreviewFile }: { run: WorkflowRun | null; onPreviewFil
         </div>
         <div className="flex-1 overflow-auto p-2">
           {isLoadingFiles && (
-            <div className="flex h-full items-center justify-center text-xs text-slate-400">加载中...</div>
+            <div className="flex h-full items-center justify-center text-xs text-slate-400">{t('加载中...')}</div>
           )}
           {!isLoadingFiles && entries.length === 0 && (
             <div className="flex h-full items-center justify-center px-4 text-center text-xs text-slate-400">
-              {error ?? (currentPath ? '此目录为空' : '暂无文件')}
+              {error ?? (currentPath ? t('此目录为空') : t('暂无文件'))}
             </div>
           )}
           {!isLoadingFiles && entries.map(entry => {
@@ -368,7 +369,7 @@ function CodeTab({ run, onPreviewFile }: { run: WorkflowRun | null; onPreviewFil
         <div className="flex min-h-[48px] items-center justify-between gap-3 border-b border-black/[0.06] px-4 py-3">
           <div className="min-w-0">
             <div className="overflow-x-auto whitespace-nowrap font-mono text-xs font-semibold text-slate-800 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {selectedPath ?? '选择左侧文件查看内容'}
+              {selectedPath ?? t('选择左侧文件查看内容')}
             </div>
             {selectedContent && (
               <div className="mt-1 text-[11px] text-slate-400">{formatFileSize(selectedContent.size)}</div>
@@ -379,18 +380,18 @@ function CodeTab({ run, onPreviewFile }: { run: WorkflowRun | null; onPreviewFil
               onClick={() => onPreviewFile(selectedPath)}
               className="shrink-0 rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-[11px] font-medium text-slate-700 transition hover:border-slate-400 hover:bg-white hover:text-slate-900"
             >
-              <span className="mr-1">▶</span>预览
+              <span className="mr-1">▶</span>{t('预览')}
             </button>
           )}
         </div>
         <div className="flex-1 overflow-auto">
           {!selectedPath && (
             <div className="flex h-full items-center justify-center text-sm text-slate-400">
-              点击左侧文件查看详细内容
+              {t('点击左侧文件查看详细内容')}
             </div>
           )}
           {selectedPath && isLoadingContent && (
-            <div className="flex h-full items-center justify-center text-sm text-slate-400">正在读取文件内容...</div>
+            <div className="flex h-full items-center justify-center text-sm text-slate-400">{t('正在读取文件内容...')}</div>
           )}
           {selectedContent && (
             <FileViewer
@@ -496,7 +497,7 @@ function TaskTab({ run }: { run: WorkflowRun | null }) {
   }
 
   if (!run) return <EmptyState />
-  if (activeNodes.length === 0) return <EmptyState hint="等待 Agent 开始执行..." />
+  if (activeNodes.length === 0) return <EmptyState hint={t('等待 Agent 开始执行...')} />
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-4 pr-5">
@@ -557,16 +558,16 @@ function FlowTab({ run }: { run: WorkflowRun | null }) {
         agentType: node.agentType,
         displayName: node.displayName,
         description: node.status === 'pending'
-          ? '等待执行该节点'
+          ? t('等待执行该节点')
           : node.status === 'completed'
-            ? (node.output?.trim() || '已完成')
+            ? (node.output?.trim() || t('已完成'))
             : (node.output?.trim() || node.logs.find(line => line.trim()) || (
-                node.status === 'running' ? '执行中...'
-                  : node.status === 'failed' ? '执行失败'
-                    : '等待确认'
+                node.status === 'running' ? t('执行中...')
+                  : node.status === 'failed' ? t('执行失败')
+                    : t('等待确认')
               )),
         promptTemplate: node.prompt,
-        badgeLabel: RUN_NODE_STATUS_LABEL[node.status],
+        badgeLabel: t(RUN_NODE_STATUS_LABEL[node.status]),
         badgeClassName: RUN_NODE_BADGE_CLASS[node.status],
         helperText: '',
       },
@@ -619,21 +620,21 @@ function FlowTab({ run }: { run: WorkflowRun | null }) {
         {selectedNode && (
           <WorkflowInspector
             title={selectedNode.displayName || selectedNode.agentName}
-            subtitle={`${selectedNode.agentType === 'custom' ? '自定义 Agent' : 'OMC 内置 Agent'} · ${selectedNode.id}`}
+            subtitle={`${selectedNode.agentType === 'custom' ? t('自定义 Agent') : t('OMC 内置 Agent')} · ${selectedNode.id}`}
             statusLabel={
-              selectedNode.status === 'running' ? '执行中' :
-              selectedNode.status === 'completed' ? '已完成' :
-              selectedNode.status === 'failed' ? '失败' :
-              selectedNode.status === 'waiting' ? '等待确认' : '等待中'
+              selectedNode.status === 'running' ? t('执行中') :
+              selectedNode.status === 'completed' ? t('已完成') :
+              selectedNode.status === 'failed' ? t('失败') :
+              selectedNode.status === 'waiting' ? t('等待确认') : t('等待中')
             }
             statusTone={selectedNode.status}
             fields={[
               { label: 'Agent', value: selectedNode.agentName },
-              { label: '类型', value: selectedNode.agentType === 'custom' ? '自定义 Agent' : 'OMC 内置 Agent' },
-              { label: '时间', value: selectedNode.startedAt ? `${formatDateTime(selectedNode.startedAt)}${selectedNode.finishedAt ? ` → ${formatDateTime(selectedNode.finishedAt)}` : ''}` : '尚未开始执行' },
+              { label: t('类型'), value: selectedNode.agentType === 'custom' ? t('自定义 Agent') : t('OMC 内置 Agent') },
+              { label: t('时间'), value: selectedNode.startedAt ? `${formatDateTime(selectedNode.startedAt)}${selectedNode.finishedAt ? ` → ${formatDateTime(selectedNode.finishedAt)}` : ''}` : t('尚未开始执行') },
               { label: 'Prompt', value: selectedNode.prompt },
             ]}
-            emptyHint="点击流程中的节点查看运行状态和 Prompt"
+            emptyHint={t('点击流程中的节点查看运行状态和 Prompt')}
           />
         )}
       </div>
@@ -647,11 +648,11 @@ function PreviewEmptyHint() {
       <div className="text-[64px] opacity-60 select-none">🐱</div>
       <div className="space-y-2">
         <div className="text-[13px] font-semibold tracking-[-0.01em] text-slate-700">
-          暂无可预览的内容
+          {t('暂无可预览的内容')}
         </div>
         <div className="space-y-1 text-[12px] leading-6 text-slate-400">
-          <div>· 等待 Agent 生成交付物（如 index.html、原型 HTML）</div>
-          <div>· 或在「代码」Tab 中打开任意 .html 文件，点击右上角「预览」</div>
+          <div>{t('· 等待 Agent 生成交付物（如 index.html、原型 HTML）')}</div>
+          <div>{t('· 或在「代码」Tab 中打开任意 .html 文件，点击右上角「预览」')}</div>
         </div>
       </div>
     </div>
@@ -708,7 +709,7 @@ function PreviewTab({
         if (cancelled) return
         setPreviewPath(null)
         setPreviewContent(null)
-        setError(overridePath ? '无法读取该 HTML 文件' : null)
+        setError(overridePath ? t('无法读取该 HTML 文件') : null)
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)
@@ -725,7 +726,7 @@ function PreviewTab({
   }
 
   if (!run) return <PreviewEmptyHint />
-  if (isLoading) return <EmptyState hint="正在查找可预览的交付文件..." />
+  if (isLoading) return <EmptyState hint={t('正在查找可预览的交付文件...')} />
   if (!previewContent) {
     if (error) return <EmptyState hint={error} />
     return <PreviewEmptyHint />
@@ -736,7 +737,7 @@ function PreviewTab({
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-black/[0.06] bg-white/35 px-4 py-2.5">
         <div className="min-w-0">
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-            {overridePath ? '代码预览' : '交付预览'}
+            {overridePath ? t('代码预览') : t('交付预览')}
           </div>
           <div className="mt-0.5 truncate font-mono text-[12px] text-slate-700" title={previewPath ?? ''}>
             {previewPath}
@@ -748,13 +749,13 @@ function PreviewTab({
               onClick={onClearOverride}
               className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-[11px] font-medium text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
             >
-              返回交付预览
+              {t('返回交付预览')}
             </button>
           )}
           <button
             onClick={handleClose}
-            aria-label="关闭预览"
-            title="关闭预览"
+            aria-label={t('关闭预览')}
+            title={t('关闭预览')}
             className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white/70 text-slate-500 transition hover:border-slate-400 hover:text-slate-900"
           >
             <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
@@ -767,7 +768,7 @@ function PreviewTab({
         srcDoc={previewContent}
         sandbox="allow-scripts allow-forms allow-popups"
         className="w-full flex-1 border-0 bg-white"
-        title="预览"
+        title={t('预览')}
       />
     </div>
   )
@@ -859,9 +860,9 @@ function AutoRunRateLimitCard({
 
   return (
     <div className="max-w-[88%] rounded-2xl rounded-tl-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
-      <div className="font-semibold">检测到额度限制</div>
+      <div className="font-semibold">{t('检测到额度限制')}</div>
       <div className="mt-0.5 text-amber-700">
-        重置时间 {formatResetTime(wait)} ({wait.timeZone})
+        {t('重置时间')} {formatResetTime(wait)} ({wait.timeZone})
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <button
@@ -869,7 +870,7 @@ function AutoRunRateLimitCard({
           onClick={onCancel}
           className="rounded-full border border-rose-200 bg-white/70 px-3 py-1.5 text-[12px] font-medium text-rose-600 transition hover:border-rose-300"
         >
-          终止
+          {t('终止')}
         </button>
         <button
           type="button"
@@ -877,7 +878,7 @@ function AutoRunRateLimitCard({
           onClick={onContinue}
           className="rounded-full border border-slate-900 bg-slate-900 px-3 py-1.5 text-[12px] font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:opacity-70"
         >
-          {isWaiting ? `确认 (${countdown})` : '确认'}
+          {isWaiting ? `${t('确认')} (${countdown})` : t('确认')}
         </button>
       </div>
     </div>
@@ -1003,7 +1004,7 @@ function buildContinuePrompt(sourceRun: WorkflowRun, sourceRound: WorkflowRound 
 
 function assertSelectedAgents(plan: AiSelectResponse): void {
   if (!Array.isArray(plan.nodes) || plan.nodes.length === 0) {
-    throw new Error('AI 没有选择任何 Agent，请换一种描述后重试')
+    throw new Error(t('AI 没有选择任何 Agent，请换一种描述后重试'))
   }
 }
 
@@ -1054,14 +1055,14 @@ function AutoFixCard({
   return (
     <div className="rounded-[26px] border border-amber-200 bg-amber-50/60 p-5 shadow-sm">
       <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-900">
-        <span>⚠️ Code-reviewer 发现问题</span>
+        <span>{t('⚠️ Code-reviewer 发现问题')}</span>
         <span className="rounded-full border border-amber-300 bg-white/70 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-          第 {usedRound} / 3 轮 · 还可自动修复 {offer.remainingBudget} 次
+          {t('第 {used} / 3 轮 · 还可自动修复 {left} 次', { used: usedRound, left: offer.remainingBudget })}
         </span>
       </div>
       {offer.affectedPaths.length > 0 && (
         <div className="mb-3">
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">涉及文件</div>
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{t('涉及文件')}</div>
           <div className="flex flex-wrap gap-1.5">
             {offer.affectedPaths.slice(0, 8).map(path => (
               <span key={path} className="rounded-full border border-slate-200 bg-white/70 px-2.5 py-0.5 font-mono text-[11px] text-slate-600">
@@ -1077,13 +1078,13 @@ function AutoFixCard({
       <div className="mb-4 rounded-[14px] bg-white/60 px-3 py-2 text-xs leading-5 text-slate-600">
         {offer.suggestedAgent ? (
           <>
-            <span className="font-semibold text-slate-800">规则建议：</span>
-            由 <span className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-[11px] text-white">{offer.suggestedAgent}</span> 修复 + 重新 code-reviewer 复审
+            <span className="font-semibold text-slate-800">{t('规则建议：')}</span>
+            {t('由')} <span className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-[11px] text-white">{offer.suggestedAgent}</span> {t('修复 + 重新 code-reviewer 复审')}
           </>
         ) : (
           <>
-            <span className="font-semibold text-slate-800">规则未匹配：</span>
-            将由 AI 根据问题描述选择合适的修复 Agent
+            <span className="font-semibold text-slate-800">{t('规则未匹配：')}</span>
+            {t('将由 AI 根据问题描述选择合适的修复 Agent')}
           </>
         )}
       </div>
@@ -1098,14 +1099,14 @@ function AutoFixCard({
           disabled={isSubmitting}
           className="flex-1 min-w-[120px] rounded-full border border-slate-300 bg-white/70 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-white disabled:opacity-50"
         >
-          接受问题，结束流程
+          {t('接受问题，结束流程')}
         </button>
         <button
           onClick={onAccept}
           disabled={isSubmitting}
           className="flex-1 min-w-[120px] rounded-full border border-slate-900 bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isSubmitting ? '启动中...' : '立即自动修复'}
+          {isSubmitting ? t('启动中...') : t('立即自动修复')}
         </button>
       </div>
     </div>
@@ -1120,8 +1121,8 @@ function LiveRunList({ runs, onSelect, onCreate }: { runs: WorkflowRun[]; onSele
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center">
         <div className="mb-6">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Live Runs</p>
-          <h1 className="text-[2rem] font-semibold tracking-[-0.045em] text-slate-950">选择运行中的任务</h1>
-          <p className="mt-2 text-sm text-slate-500">当前有多个任务正在执行，选择一个进入详细运行视图。</p>
+          <h1 className="text-[2rem] font-semibold tracking-[-0.045em] text-slate-950">{t('选择运行中的任务')}</h1>
+          <p className="mt-2 text-sm text-slate-500">{t('当前有多个任务正在执行，选择一个进入详细运行视图。')}</p>
         </div>
 
         <div className="grid gap-3">
@@ -1140,7 +1141,7 @@ function LiveRunList({ runs, onSelect, onCreate }: { runs: WorkflowRun[]; onSele
                     <span className="truncate text-base font-semibold tracking-[-0.02em] text-slate-900">{run.name}</span>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                    <span>{run.status === 'running' ? '执行中' : '等待确认'}</span>
+                    <span>{run.status === 'running' ? t('执行中') : t('等待确认')}</span>
                     {activeNode && (
                       <>
                         <span>·</span>
@@ -1152,7 +1153,7 @@ function LiveRunList({ runs, onSelect, onCreate }: { runs: WorkflowRun[]; onSele
                   </div>
                 </div>
                 <span className="shrink-0 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-500 transition group-hover:border-slate-400 group-hover:text-slate-800">
-                  进入
+                  {t('进入')}
                 </span>
               </button>
             )
@@ -1163,7 +1164,7 @@ function LiveRunList({ runs, onSelect, onCreate }: { runs: WorkflowRun[]; onSele
           onClick={onCreate}
           className="mt-6 w-fit rounded-full bg-slate-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
         >
-          创建新任务
+          {t('创建新任务')}
         </button>
       </div>
     </div>
@@ -1335,7 +1336,7 @@ export default function RunnerPage() {
         if (!cancelled) setHistoryRun(run)
       })
       .catch(error => {
-        if (!cancelled) setHistoryRunError(getApiErrorMessage(error, '运行快照数据不完整或已失效'))
+        if (!cancelled) setHistoryRunError(getApiErrorMessage(error, t('运行快照数据不完整或已失效')))
       })
       .finally(() => {
         if (!cancelled) setIsLoadingHistoryRun(false)
@@ -1373,7 +1374,7 @@ export default function RunnerPage() {
   const displayAgentNames = agentNames.length > 0
     ? agentNames
     : Array.from(new Set((rounds.length > 0 ? rounds.flatMap(round => round.nodes) : displayRun?.nodes ?? []).map(node => node.agentName)))
-  const projectName = routeState.projectName || displayRun?.name || '未命名项目'
+  const projectName = routeState.projectName || displayRun?.name || t('未命名项目')
   const agentName   = displayRun?.nodes[0]?.agentName ?? displayAgentNames[0] ?? 'Agent'
   const isTaskExecuting = currentRun?.status === 'running'
     || currentRun?.status === 'paused'
@@ -1449,7 +1450,7 @@ export default function RunnerPage() {
         setSelectedRoundId(null)
       })
       .catch(error => {
-        if (!cancelled) setHistoryRunError(getApiErrorMessage(error, '运行快照数据刷新失败'))
+        if (!cancelled) setHistoryRunError(getApiErrorMessage(error, t('运行快照数据刷新失败')))
       })
     return () => {
       cancelled = true
@@ -1463,7 +1464,7 @@ export default function RunnerPage() {
       if (!stillMissing) return
       setPendingContinueRunId(null)
       setIsContinuingHistoryRun(false)
-      setContinueError('继续任务启动超时，请重试')
+      setContinueError(t('继续任务启动超时，请重试'))
     }, 15000)
     return () => window.clearTimeout(timer)
   }, [pendingContinueRunId])
@@ -1544,7 +1545,7 @@ export default function RunnerPage() {
     } catch (error) {
       setPersistedAutoRunState(
         'error',
-        getApiErrorMessage(error, 'AI 任务分配失败，请重试'),
+        getApiErrorMessage(error, t('AI 任务分配失败，请重试')),
         true,
       )
     }
@@ -1561,7 +1562,7 @@ export default function RunnerPage() {
 
   const cancelAutoRun = useCallback(() => {
     autoRunStartedRef.current = false
-    setPersistedAutoRunState('error', '任务已终止', false)
+    setPersistedAutoRunState('error', t('任务已终止'), false)
     setRunnerSession(null)
     navigate('/')
   }, [navigate, setPersistedAutoRunState, setRunnerSession])
@@ -1598,7 +1599,7 @@ export default function RunnerPage() {
         setSelectedRoundId(null)
         setInputValue('')
       } catch (error) {
-        setContinueError(getApiErrorMessage(error, '继续任务创建失败，请重试'))
+        setContinueError(getApiErrorMessage(error, t('继续任务创建失败，请重试')))
         setIsContinuingHistoryRun(false)
       }
       return
@@ -1619,7 +1620,7 @@ export default function RunnerPage() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-sm text-slate-500">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-slate-500" />
-        正在加载历史快照...
+        {t('正在加载历史快照...')}
       </div>
     )
   }
@@ -1630,13 +1631,13 @@ export default function RunnerPage() {
         <div className="text-[56px] opacity-50 select-none">⚠️</div>
         <div className="space-y-1">
           <p className="text-sm font-medium text-slate-600">{historyRunError}</p>
-          <p className="text-xs text-slate-400">请返回历史记录重新选择一个任务</p>
+          <p className="text-xs text-slate-400">{t('请返回历史记录重新选择一个任务')}</p>
         </div>
         <button
           onClick={() => navigate('/history')}
           className="mt-2 rounded-full bg-slate-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
         >
-          返回历史
+          {t('返回历史')}
         </button>
       </div>
     )
@@ -1646,7 +1647,7 @@ export default function RunnerPage() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-sm text-slate-500">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-slate-500" />
-        正在恢复运行快照...
+        {t('正在恢复运行快照...')}
       </div>
     )
   }
@@ -1666,14 +1667,14 @@ export default function RunnerPage() {
       <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
         <div className="text-[56px] opacity-50 select-none">📭</div>
         <div className="space-y-1">
-          <p className="text-sm font-medium text-slate-600">暂无运行中的任务</p>
-          <p className="text-xs text-slate-400">去创建页面发起一个新的协作流程</p>
+          <p className="text-sm font-medium text-slate-600">{t('暂无运行中的任务')}</p>
+          <p className="text-xs text-slate-400">{t('去创建页面发起一个新的协作流程')}</p>
         </div>
         <button
           onClick={() => navigate('/')}
           className="mt-2 rounded-full bg-slate-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
         >
-          去创建
+          {t('去创建')}
         </button>
       </div>
     )
@@ -1691,7 +1692,7 @@ export default function RunnerPage() {
             <button
               onClick={() => navigate('/')}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-              aria-label="返回"
+              aria-label={t('返回')}
             >
               <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4">
                 <path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
@@ -1730,7 +1731,7 @@ export default function RunnerPage() {
                     />
                   ))}
                 </span>
-                {autoRunStatus === 'selecting' ? '大模型正在选择合适的 Agent...' : '正在启动工作流...'}
+                {autoRunStatus === 'selecting' ? t('大模型正在选择合适的 Agent...') : t('正在启动工作流...')}
               </div>
             </div>
           )}
@@ -1748,7 +1749,7 @@ export default function RunnerPage() {
           {autoRunStatus === 'error' && !autoRunRateLimitWait && (
             <div className="flex justify-start">
               <div className="max-w-[88%] rounded-2xl rounded-tl-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm leading-6 text-rose-600">
-                {autoRunError ?? 'AI 任务分配失败，请重试'}
+                {autoRunError ?? t('AI 任务分配失败，请重试')}
               </div>
             </div>
           )}
@@ -1760,7 +1761,7 @@ export default function RunnerPage() {
                 <div className="flex items-center gap-3 py-1">
                   <div className="h-px flex-1 bg-slate-200/80" />
                   <span className="rounded-full border border-slate-200 bg-white/40 px-3 py-1 text-[11px] font-medium text-slate-500">
-                    第 {roundIndex + 1} 轮 · {getRoundStatusLabel(round.status)}
+                    {t('第 {n} 轮', { n: roundIndex + 1 })} · {getRoundStatusLabel(round.status)}
                   </span>
                   <div className="h-px flex-1 bg-slate-200/80" />
                 </div>
@@ -1814,18 +1815,18 @@ export default function RunnerPage() {
                       {isError ? (
                         <div className="inline-flex items-center gap-1.5 rounded-2xl rounded-tl-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-medium text-amber-700">
                           <span>⊗</span>
-                          <span>执行失败，可在右侧任务栏查看完整日志</span>
+                          <span>{t('执行失败，可在右侧任务栏查看完整日志')}</span>
                         </div>
                       ) : isWaiting ? (
                         <div className="inline-flex items-center gap-1.5 rounded-2xl rounded-tl-md border border-sky-200 bg-sky-50 px-4 py-2.5 text-xs font-medium text-sky-700">
                           <span>⏸</span>
-                          <span>等待确认后继续执行</span>
+                          <span>{t('等待确认后继续执行')}</span>
                         </div>
                       ) : isRunning ? (
                         <div className="w-full max-w-[88%] overflow-hidden rounded-2xl rounded-tl-md border border-blue-100 bg-blue-50/60">
                           <div className="flex items-center gap-1.5 border-b border-blue-100/70 px-4 py-2.5">
                             <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-blue-500" />
-                            <span className="text-xs font-medium text-blue-600">执行中</span>
+                            <span className="text-xs font-medium text-blue-600">{t('执行中')}</span>
                           </div>
                           {node.logs.some(l => l.trim()) && (
                             <pre className="whitespace-pre-wrap break-words px-4 py-3 font-mono text-[11px] leading-relaxed text-slate-500">
@@ -1836,7 +1837,7 @@ export default function RunnerPage() {
                       ) : (
                         <div className="inline-flex items-center gap-1.5 rounded-2xl rounded-tl-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-medium text-emerald-700">
                           <span>✓</span>
-                          <span>已完成，详情请查看右侧任务栏</span>
+                          <span>{t('已完成，详情请查看右侧任务栏')}</span>
                         </div>
                       )}
                     </div>
@@ -1888,7 +1889,7 @@ export default function RunnerPage() {
                       const candidate = plan.nodes.find(node => node.agentName !== 'code-reviewer')
                       fixAgentName = candidate?.agentName ?? plan.nodes[0]?.agentName ?? null
                     }
-                    if (!fixAgentName) throw new Error('未能选出修复 agent')
+                    if (!fixAgentName) throw new Error(t('未能选出修复 agent'))
 
                     const fixPrompt = buildAutoFixPrompt(pendingAutoFix, fixAgentName)
                     send({
@@ -1907,7 +1908,7 @@ export default function RunnerPage() {
                     })
                     setPendingAutoFix(null)
                   } catch (error) {
-                    setAutoFixError(getApiErrorMessage(error, '启动自动修复失败，请重试'))
+                    setAutoFixError(getApiErrorMessage(error, t('启动自动修复失败，请重试')))
                   } finally {
                     setAutoFixSubmitting(false)
                   }
@@ -1924,7 +1925,7 @@ export default function RunnerPage() {
           {/* Empty */}
           {!displayRun && !displayPrompt && (
             <div className="flex h-32 items-center justify-center text-sm text-slate-400">
-              暂无运行中的任务
+              {t('暂无运行中的任务')}
             </div>
           )}
 
@@ -1976,7 +1977,7 @@ export default function RunnerPage() {
                 value={inputValue}
                 onChange={e => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={isHistoryDetail ? '基于此任务继续提需求...' : '说说你的想法...'}
+                placeholder={isHistoryDetail ? t('基于此任务继续提需求...') : t('说说你的想法...')}
                 rows={3}
                 className="block h-[72px] w-full resize-none border-0 bg-transparent px-2 text-[0.95rem] leading-7 tracking-[-0.025em] text-slate-900 outline-none placeholder:text-slate-400"
               />
@@ -1995,7 +1996,7 @@ export default function RunnerPage() {
               <button
                 onClick={() => void handleSend()}
                 disabled={isSendDisabled}
-                aria-label="发送消息"
+                aria-label={t('发送消息')}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-black bg-black text-[1.05rem] text-white shadow-none transition hover:scale-[1.02] hover:bg-neutral-900 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:text-white disabled:opacity-70"
               >
                 {isContinuingHistoryRun ? '…' : '↑'}
@@ -2025,7 +2026,7 @@ export default function RunnerPage() {
                 <span className={activeTab === tab ? 'text-slate-500' : 'text-slate-300'}>
                   <TabIcon tab={tab} />
                 </span>
-                {tab}
+                {t(tab)}
                 {activeTab === tab && (
                   <span className="absolute bottom-0 left-2.5 right-2.5 h-[2px] rounded-t-full bg-slate-800" />
                 )}
@@ -2047,16 +2048,16 @@ export default function RunnerPage() {
                     displayRun.status === 'completed' ? 'bg-emerald-500' :
                                                         'bg-rose-500'
                   }`} />
-                  {displayRun.status === 'running'   ? '执行中' :
-                   displayRun.status === 'paused'    ? '等待确认' :
-                   displayRun.status === 'completed' ? '已完成' : '失败'}
+                  {displayRun.status === 'running'   ? t('执行中') :
+                   displayRun.status === 'paused'    ? t('等待确认') :
+                   displayRun.status === 'completed' ? t('已完成') : t('失败')}
                 </span>
                 {currentRun && (currentRun.status === 'running' || currentRun.status === 'paused') && (
                   <button
                     onClick={() => send({ type: 'task:cancel', payload: { runId: currentRun.id } })}
                     className="rounded-full border border-rose-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-rose-500 transition hover:border-rose-300"
                   >
-                    取消
+                    {t('取消')}
                   </button>
                 )}
               </div>

@@ -4,6 +4,7 @@ import WorkflowDAG from '../components/WorkflowDAG/index'
 import LogStream from '../components/LogStream/index'
 import ConfirmCard from '../components/ConfirmCard/index'
 import type { NodeStatus } from '../types/index'
+import { t } from '../lib/i18n'
 
 const RUN_STATUS_STYLE = {
   running: 'border border-[rgba(0,113,227,0.14)] bg-[rgba(0,113,227,0.08)] text-[#0058b0]',
@@ -21,7 +22,7 @@ export default function Runner() {
   if (runningRuns.length === 0) {
     return (
       <div className="surface-panel-soft flex min-h-[320px] items-center justify-center rounded-[34px] px-8 text-center text-slate-500">
-        暂无运行中的任务 - 去 Dashboard 发起一个新的协作流程
+        {t('暂无运行中的任务 - 去 Dashboard 发起一个新的协作流程')}
       </div>
     )
   }
@@ -36,7 +37,7 @@ export default function Runner() {
               <h2 className="text-[1.8rem] font-semibold tracking-[-0.035em] text-slate-950">{run.name}</h2>
             </div>
             <span className={`status-pill w-fit ${RUN_STATUS_STYLE[run.status as 'running' | 'paused']}`}>
-              {run.status === 'running' ? '● 执行中' : '⏸ 等待确认'}
+              {run.status === 'running' ? `● ${t('执行中')}` : `⏸ ${t('等待确认')}`}
             </span>
           </div>
 

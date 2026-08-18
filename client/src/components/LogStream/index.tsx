@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import StreamingText from '../StreamingText/index'
 import { compactAdjacentLogBlocks } from '../../lib/logDisplay'
 import { api } from '../../lib/api'
+import { t } from '../../lib/i18n'
 import { useWorkflowStore } from '../../store/workflowStore'
 
 interface Props {
@@ -58,7 +59,7 @@ export default function LogStream({ runId, roundId, nodeId, logs, logCount, agen
     [loadedLogs]
   )
   const logText = displayLogs.join('\n')
-  const displayText = logText || (status === 'running' ? '执行中...' : '')
+  const displayText = logText || (status === 'running' ? t('执行中...') : '')
 
   useLayoutEffect(() => {
     if (!isExpanded) return
@@ -107,7 +108,7 @@ export default function LogStream({ runId, roundId, nodeId, logs, logCount, agen
       setLoadedLogs(current => [...page.items, ...current])
       setLoadedStart(page.start)
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : '日志加载失败')
+      setLoadError(error instanceof Error ? error.message : t('日志加载失败'))
     } finally {
       setIsLoadingOlder(false)
     }
@@ -139,7 +140,7 @@ export default function LogStream({ runId, roundId, nodeId, logs, logCount, agen
         {status === 'failed' && <span>×</span>}
         {totalLogs > loadedLogs.length && (
           <span className="ml-auto normal-case tracking-normal text-slate-400">
-            已显示 {loadedLogs.length}/{totalLogs}
+            {t('已显示')} {loadedLogs.length}/{totalLogs}
           </span>
         )}
         {headerInteractive && (
@@ -160,7 +161,7 @@ export default function LogStream({ runId, roundId, nodeId, logs, logCount, agen
           className={`${fillContainer ? 'flex-1 min-h-0' : 'max-h-[70vh]'} overflow-y-auto p-4 pr-5 font-mono text-xs leading-relaxed text-slate-500`}
         >
           {isLoadingOlder && (
-            <div className="mb-3 text-[11px] text-slate-400">加载中...</div>
+            <div className="mb-3 text-[11px] text-slate-400">{t('加载中...')}</div>
           )}
           {loadError && (
             <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-600">
