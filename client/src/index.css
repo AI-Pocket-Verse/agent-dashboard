@@ -1,0 +1,437 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: rgb(247, 248, 253);
+  --bg-soft: rgb(247, 248, 253);
+  --panel: transparent;
+  --panel-solid: rgb(247, 248, 253);
+  --panel-muted: transparent;
+  --ink: #1d1d1f;
+  --muted: #6e6e73;
+  --line: rgba(29, 29, 31, 0.08);
+  --line-strong: rgba(29, 29, 31, 0.12);
+  --primary: #0071e3;
+  --primary-strong: #0058b0;
+  --primary-soft: rgba(0, 113, 227, 0.1);
+  --success: #1f9a51;
+  --success-soft: rgba(31, 154, 81, 0.1);
+  --warning: #c97a00;
+  --warning-soft: rgba(255, 159, 10, 0.12);
+  --danger: #d93025;
+  --danger-soft: rgba(217, 48, 37, 0.1);
+  --shadow: 0 18px 48px rgba(15, 23, 42, 0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  position: relative;
+  margin: 0;
+  color: var(--ink);
+  font-family: 'SF Pro Display', 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: transparent;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+code {
+  color: var(--primary-strong);
+}
+
+::selection {
+  background: rgba(0, 113, 227, 0.14);
+  color: #0f172a;
+}
+
+@layer components {
+  .surface-panel {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .surface-panel-soft {
+    border: 1px solid var(--line);
+    background: var(--panel-muted);
+    box-shadow: none;
+  }
+
+  .field-input {
+    width: 100%;
+    border: 1px solid var(--line-strong);
+    border-radius: 18px;
+    background: transparent;
+    color: var(--ink);
+    padding: 0.9rem 1rem;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  }
+
+  .field-input::placeholder {
+    color: #9a9aa1;
+  }
+
+  .field-input:focus {
+    outline: none;
+    border-color: rgba(0, 113, 227, 0.46);
+    box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.11);
+    background: transparent;
+  }
+
+  .section-kicker {
+    margin-bottom: 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .page-title {
+    font-size: clamp(2rem, 3.8vw, 4.35rem);
+    line-height: 0.98;
+    color: #111114;
+  }
+
+  .page-copy {
+    font-size: 1rem;
+    line-height: 1.85;
+    color: var(--muted);
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost,
+  .btn-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 999px;
+    padding: 0.78rem 1.28rem;
+    font-size: 0.94rem;
+    font-weight: 600;
+    transition: transform 0.18s ease, background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  }
+
+  .btn-primary:hover,
+  .btn-secondary:hover,
+  .btn-ghost:hover,
+  .btn-danger:hover {
+    transform: translateY(-1px);
+  }
+
+  .btn-primary {
+    border: 1px solid rgba(0, 113, 227, 0.1);
+    background: linear-gradient(180deg, #0a84ff 0%, var(--primary) 100%);
+    color: #fff;
+    box-shadow: 0 12px 26px rgba(0, 113, 227, 0.2);
+  }
+
+  .btn-primary:hover {
+    background: linear-gradient(180deg, #0975df 0%, var(--primary-strong) 100%);
+  }
+
+  .btn-secondary {
+    border: 1px solid var(--line-strong);
+    background: transparent;
+    color: #3a3a3c;
+  }
+
+  .btn-secondary:hover {
+    background: transparent;
+  }
+
+  .btn-ghost {
+    border: 1px solid transparent;
+    background: transparent;
+    color: #3a3a3c;
+  }
+
+  .btn-ghost:hover {
+    background: transparent;
+  }
+
+  .btn-danger {
+    border: 1px solid rgba(217, 48, 37, 0.12);
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+
+  .btn-danger:hover {
+    background: rgba(217, 48, 37, 0.14);
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 999px;
+    padding: 0.42rem 0.78rem;
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+}
+
+.react-flow__controls {
+  overflow: hidden;
+  border: 1px solid var(--line) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06) !important;
+}
+
+.react-flow__controls-button {
+  border-bottom: 1px solid var(--line) !important;
+  background: var(--bg) !important;
+  color: #52525b !important;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--bg) !important;
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+.workflow-edge-running .react-flow__edge-path,
+.workflow-edge-running path {
+  stroke-dasharray: 8 6;
+  animation: workflow-edge-flow 0.75s linear infinite;
+  filter: drop-shadow(0 0 3px rgba(0, 113, 227, 0.22));
+}
+
+.workflow-node-running {
+  overflow: visible !important;
+}
+
+.workflow-node-running::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border: 1px solid rgba(0, 113, 227, 0.28);
+  border-radius: 24px;
+  pointer-events: none;
+  animation: workflow-node-pulse 1.45s ease-out infinite;
+}
+
+@keyframes workflow-edge-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+
+@keyframes workflow-node-pulse {
+  0% {
+    opacity: 0.72;
+    transform: scale(0.98);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+
+.workflow-edge-selected .react-flow__edge-path {
+  cursor: pointer;
+}
+
+.react-flow__edge.selected .react-flow__edgeupdater {
+  width: 30px;
+  height: 30px;
+  cursor: crosshair;
+}
+
+.react-flow__edge.selected .react-flow__edgeupdater::after {
+  width: 9px;
+  height: 9px;
+  background: rgba(17, 17, 20, 0.72);
+  box-shadow: 0 0 0 4px rgba(17, 17, 20, 0.08);
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge.selected path,
+.workflow-edge-selected .react-flow__edge-path,
+.workflow-edge-selected path {
+  stroke-dasharray: 10 6;
+  animation: workflow-edge-flow 0.8s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(17, 17, 20, 0.16));
+}
+
+.react-flow__edge.selected .react-flow__edgeupdater::after {
+  width: 9px;
+  height: 9px;
+  background: rgba(17, 17, 20, 0.72);
+  box-shadow: 0 0 0 4px rgba(17, 17, 20, 0.08);
+}
+
+* {
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  background: transparent;
+}
+
+html.scrollbars-active * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 128, 0.38) transparent;
+}
+
+html.scrollbars-active *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html.scrollbars-active *::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(120, 120, 128, 0.38);
+  background-clip: padding-box;
+}
+
+html.scrollbars-active *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.workflow-node-handle {
+  width: 16px !important;
+  height: 16px !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.workflow-node-handle-target {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.workflow-node-handle-source {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.workflow-node-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: rgba(17, 17, 20, 0.24);
+  box-shadow: 0 0 0 1px rgba(17, 17, 20, 0.04);
+  transition: transform 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.workflow-node-handle-target::after,
+.workflow-node-handle-source::after {
+  width: 6px;
+  height: 6px;
+  background: rgba(17, 17, 20, 0.18);
+  box-shadow: 0 0 0 1px rgba(17, 17, 20, 0.04);
+}
+
+.workflow-node-handle.react-flow__handle-top {
+  top: -7px !important;
+}
+
+.workflow-node-handle.react-flow__handle-bottom {
+  bottom: -7px !important;
+}
+
+
+.workflow-node-handle-target:hover::after,
+.workflow-node-handle-target.connectionindicator::after,
+.workflow-node-handle-target.workflow-node-handle-selected::after,
+.workflow-node-handle-source:hover::after,
+.workflow-node-handle-source.workflow-node-handle-selected::after,
+.workflow-node-handle-source.connectingfrom::after {
+  transform: translate(-50%, -50%) scale(1.08);
+  background: rgba(17, 17, 20, 0.46);
+  box-shadow: 0 0 0 2px rgba(17, 17, 20, 0.06);
+}
+
+.react-flow__edgeupdater {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.react-flow__edgeupdater::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: rgba(17, 17, 20, 0.34);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+  transition: transform 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.react-flow__edgeupdater:hover::after {
+  transform: translate(-50%, -50%) scale(1.14);
+  background: rgba(0, 113, 227, 0.82);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.12);
+}
