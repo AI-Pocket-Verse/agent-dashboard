@@ -2,7 +2,7 @@
 # the server depends on the @agent-dashboard/shared workspace package.
 FROM node:22-bookworm-slim
 
-RUN npm install -g pnpm @anthropic-ai/claude-code
+RUN npm install -g pnpm@10 @anthropic-ai/claude-code
 
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
