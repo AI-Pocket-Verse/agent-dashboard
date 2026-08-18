@@ -4,9 +4,9 @@ English | [中文](README-CN.md)
 
 A web dashboard for orchestrating multiple Claude Code agents as DAG workflows. Draw agents on a canvas, wire them into a pipeline, and watch each node spawn a real `claude` CLI process with live streaming logs.
 
-![Workflow canvas](docs/images/canvas.png)
+![Workflow canvas](docs/images/canvas-en.png)
 
-![Create a task](docs/images/dashboard.png)
+![Create a task](docs/images/dashboard-en.png)
 
 ## Features
 
