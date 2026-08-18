@@ -66,4 +66,4 @@ pnpm dev   # server + client with hot reload
 
 ## License
 
-MIT
+[Apache-2.0](LICENSE)

@@ -66,4 +66,4 @@ pnpm dev   # server + client 热更新
 
 ## License
 
-MIT
+[Apache-2.0](LICENSE)
