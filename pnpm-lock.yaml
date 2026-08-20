@@ -111,6 +111,9 @@ importers:
       fastify-plugin:
         specifier: ^5.0.0
         version: 5.1.0
+      tsx:
+        specifier: ^4.19.0
+        version: 4.21.0
       uuid:
         specifier: ^11.0.0
         version: 11.1.0
@@ -130,9 +133,6 @@ importers:
       '@types/ws':
         specifier: ^8.5.0
         version: 8.18.1
-      tsx:
-        specifier: ^4.19.0
-        version: 4.21.0
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
