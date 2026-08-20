@@ -59,8 +59,10 @@ For servers, `DASHBOARD_SECRET` is **required** — without it the dashboard is 
 DASHBOARD_SECRET=$(openssl rand -hex 16) \
 PROJECT_ROOT=/path/to/your/projects \
 ANTHROPIC_API_KEY=sk-ant-... \
-docker compose up -d --build
+docker compose up -d
 ```
+
+This pulls prebuilt images from [GHCR](https://github.com/orgs/AI-Pocket-Verse/packages?repo_name=agent-dashboard) (`ghcr.io/ai-pocket-verse/agent-dashboard-server` / `-client`). To build from source instead, add `--build`.
 
 Then open `http://<host>/` and enter your `DASHBOARD_SECRET` in the login gate. Architecture:
 

@@ -59,8 +59,10 @@ DASHBOARD_SECRET=$(openssl rand -hex 16)
 DASHBOARD_SECRET=$(openssl rand -hex 16) \
 PROJECT_ROOT=/path/to/your/projects \
 ANTHROPIC_API_KEY=sk-ant-... \
-docker compose up -d --build
+docker compose up -d
 ```
+
+默认从 [GHCR](https://github.com/orgs/AI-Pocket-Verse/packages?repo_name=agent-dashboard) 拉取现成镜像（`ghcr.io/ai-pocket-verse/agent-dashboard-server` / `-client`），无需本地构建；如需从源码构建，加 `--build` 即可。
 
 打开 `http://<host>/` ，在登录门输入 `DASHBOARD_SECRET`。架构说明：
 

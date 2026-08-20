@@ -1,5 +1,9 @@
 services:
   server:
+    # Prebuilt image is pulled by default; `docker compose up -d --build`
+    # builds from source instead (pull_policy only applies when not building).
+    image: ghcr.io/ai-pocket-verse/agent-dashboard-server:latest
+    pull_policy: missing
     build:
       context: .
       dockerfile: server/Dockerfile
@@ -19,6 +23,8 @@ services:
     restart: unless-stopped
 
   client:
+    image: ghcr.io/ai-pocket-verse/agent-dashboard-client:latest
+    pull_policy: missing
     build:
       context: .
       dockerfile: client/Dockerfile
