@@ -163,12 +163,10 @@ agent 列表由两部分组成：
 
 ## Docker 部署
 
-部署到服务器时**必须**设置 `DASHBOARD_SECRET`。不设置时服务端处于免密模式，只接受容器内部的请求，经 nginx 访问的 Web UI 会得到 `403`。
+`DASHBOARD_SECRET` 和 `PROJECT_ROOT` **必须**设置，缺少时 `docker compose` 会拒绝启动。（不设密码时服务端处于免密模式，只接受容器内部的请求，经 nginx 访问的 Web UI 会得到 `403`。）请把它们写进与 `docker-compose.yml` 同目录的 `.env` 文件，compose 的每个命令（包括 `down`、`logs`）都会读取：
 
 ```bash
-DASHBOARD_SECRET=$(openssl rand -hex 16) \
-PROJECT_ROOT=/path/to/your/projects \
-ANTHROPIC_API_KEY=sk-ant-... \
+cp .env.example .env   # 然后填写 DASHBOARD_SECRET（openssl rand -hex 16）、PROJECT_ROOT、ANTHROPIC_API_KEY、PUID/PGID
 docker compose up -d
 ```
 
@@ -179,7 +177,8 @@ docker compose up -d
 - 只有 nginx（80 端口，`client` 容器）对外暴露；它提供 Web UI，并在内部网络把 `/api` 代理到 server:3001、`/ws` 代理到 server:3002。
 - server 容器内置 `claude` CLI，通过 `ANTHROPIC_API_KEY` 认证，所有 agent 节点和 AI 选型都用它。
 - 运行历史持久化在宿主机的 `./server/data`；agent 工作区位于 `PROJECT_ROOT/workspace`。
-- 凡是公网可访问的部署，请在前面加 TLS（token 会出现在请求头和 WebSocket 查询串里）。
+- server 以非 root 用户 `PUID`:`PGID`（默认 `1000:1000`）运行，agent 在 `PROJECT_ROOT` 里创建的文件归你所有。Linux 上请设成自己的 `id -u` / `id -g`，并确保该用户对 `PROJECT_ROOT` 有写权限；macOS 的 Docker Desktop 会自动映射属主。容器启动时会把 `./server/data`（包括旧版以 root 运行时写入的数据）交给该用户。
+- 凡是公网可访问的部署，请在前面加 TLS（token 在请求头里传输，包括 WebSocket 握手）。
 
 **生产构建绝不要设置 `VITE_DASHBOARD_SECRET`** -- 它会把密码打进 JS 包。它只用于本地开发。
 
@@ -200,7 +199,7 @@ docker compose up -d
 ## 安全说明
 
 - **免密模式（不设 `DASHBOARD_SECRET`）只服务本机。** 请求必须来自回环地址，`Host` 必须是 `localhost` / `127.0.0.1`，浏览器请求还必须来自本机页面；否则返回 `403`（WebSocket 以 `4403` 关闭）。这样可以挡住局域网里的其他设备和网页发起的跨站请求。想从其他设备或通过反向代理访问，请设置 `DASHBOARD_SECRET`。
-- 设置密码后，HTTP API 要求 `Authorization: Bearer <secret>`（时间安全比对），WebSocket 要求 `?secret=<secret>`。Web UI 只需输入一次，之后保存在 `localStorage`。
+- 设置密码后，HTTP API 要求 `Authorization: Bearer <secret>`（时间安全比对），WebSocket 握手通过 `Sec-WebSocket-Protocol` 请求头携带（`agent-dashboard, auth.<base64url(secret)>`），密码不会出现在 URL 和代理访问日志里。Web UI 只需输入一次，之后保存在 `localStorage`。
 - 文件浏览只允许 `PROJECT_ROOT`、`WORKSPACE_ROOT` 和个人主目录，并拒绝 `.ssh`、`.env` 等隐藏路径。
 
 ## 常见问题

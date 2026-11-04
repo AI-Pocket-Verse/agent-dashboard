@@ -10,8 +10,14 @@ services:
     # No published ports: only nginx (client) reaches the server via the
     # internal network. Exposing 3002 directly would bypass the reverse proxy.
     environment:
-      - DASHBOARD_SECRET=${DASHBOARD_SECRET}
-      - PROJECT_ROOT=${PROJECT_ROOT}
+      # Required: without a secret the server only serves loopback requests,
+      # so every request through nginx would be refused.
+      - DASHBOARD_SECRET=${DASHBOARD_SECRET:?Set DASHBOARD_SECRET (see README, Deploy with Docker)}
+      - PROJECT_ROOT=${PROJECT_ROOT:?Set PROJECT_ROOT to the directory agents may work in}
+      # Agents run as this user, so files they create belong to it on the host.
+      # Set to your own `id -u` / `id -g` on Linux; macOS Docker Desktop maps ownership itself.
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
       - CLAUDE_BIN=${CLAUDE_BIN:-claude}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - DATA_DIR=/app/data
@@ -19,6 +25,8 @@ services:
       - AI_SELECT_TIMEOUT_MS=${AI_SELECT_TIMEOUT_MS:-180000}
       - PORT=3001
       - NODE_ENV=production
+    # tini as PID 1: forwards SIGTERM to the server and reaps exited agent processes
+    init: true
     volumes:
       - ${PROJECT_ROOT}:${PROJECT_ROOT}
       - ./server/data:/app/data

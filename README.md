@@ -163,12 +163,10 @@ The built-in templates reference the custom agents `backend-dev`, `frontend-dev`
 
 ## Deploy with Docker
 
-For servers, `DASHBOARD_SECRET` is **required**. Without it the server runs in open mode, which only accepts requests from inside its own container, so the web UI behind nginx gets `403`.
+`DASHBOARD_SECRET` and `PROJECT_ROOT` are **required**; `docker compose` refuses to start without them. (Without a secret the server runs in open mode, which only accepts requests from inside its own container, so the web UI behind nginx would get `403`.) Put them in a `.env` file next to `docker-compose.yml`, which compose reads for every command, including `down` and `logs`:
 
 ```bash
-DASHBOARD_SECRET=$(openssl rand -hex 16) \
-PROJECT_ROOT=/path/to/your/projects \
-ANTHROPIC_API_KEY=sk-ant-... \
+cp .env.example .env   # then fill in DASHBOARD_SECRET (openssl rand -hex 16), PROJECT_ROOT, ANTHROPIC_API_KEY, PUID/PGID
 docker compose up -d
 ```
 
@@ -179,7 +177,8 @@ Then open `http://<host>/` and enter your `DASHBOARD_SECRET` in the login gate.
 - Only nginx (port 80, the `client` container) is exposed; it serves the web UI and proxies `/api` → server:3001 and `/ws` → server:3002 on the internal network.
 - The server container ships the `claude` CLI, which authenticates with `ANTHROPIC_API_KEY` — every agent node and the AI selection use it.
 - Run history persists in `./server/data` on the host; agent workspaces live under `PROJECT_ROOT/workspace`.
-- For anything reachable from the internet, put TLS in front (the token travels in headers and the WebSocket query string).
+- The server runs as an unprivileged user, `PUID`:`PGID` (default `1000:1000`), so files agents create in `PROJECT_ROOT` belong to you. On Linux set them to your `id -u` / `id -g` and make sure that user can write to `PROJECT_ROOT`; Docker Desktop on macOS maps ownership automatically. On startup the container hands `./server/data` to that user, including data written by older images that ran as root.
+- For anything reachable from the internet, put TLS in front (the token travels in request headers, including the WebSocket handshake).
 
 **Never set `VITE_DASHBOARD_SECRET` for a production build** — it would bake the secret into the JS bundle. It exists only as a local-dev convenience.
 
@@ -200,7 +199,7 @@ Then open `http://<host>/` and enter your `DASHBOARD_SECRET` in the login gate.
 ## Security
 
 - **Open mode (no `DASHBOARD_SECRET`) only serves this machine.** Requests must come from a loopback address with a `localhost` / `127.0.0.1` host, and browser requests must come from a local page; anything else gets `403` (WebSocket close code `4403`). This blocks other devices on your network and cross-site requests from web pages. To use the dashboard from another device, or behind Docker/nginx, set `DASHBOARD_SECRET`.
-- With a secret set, the HTTP API requires `Authorization: Bearer <secret>` (timing-safe comparison) and the WebSocket requires `?secret=<secret>`. The web UI asks for it once and keeps it in `localStorage`.
+- With a secret set, the HTTP API requires `Authorization: Bearer <secret>` (timing-safe comparison) and the WebSocket handshake carries it in the `Sec-WebSocket-Protocol` header (`agent-dashboard, auth.<base64url(secret)>`), so it never appears in URLs or proxy access logs. The web UI asks for it once and keeps it in `localStorage`.
 - The file browser only lists `PROJECT_ROOT`, `WORKSPACE_ROOT` and your home directory, and refuses hidden paths such as `.ssh` or `.env`.
 
 ## Troubleshooting

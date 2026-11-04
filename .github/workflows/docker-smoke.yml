@@ -1,0 +1,64 @@
+# Builds both images from source and smoke-tests the compose deployment:
+# required env vars, auth, WebSocket auth, non-root server, legacy root-owned
+# data, nginx config, and nginx re-resolving a recreated server container.
+# Nothing is pushed.
+name: Docker smoke test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DASHBOARD_SECRET: ci-smoke-secret
+      PROJECT_ROOT: /tmp/agent-dashboard-projects
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Compose refuses to start without required variables
+        run: |
+          for var in DASHBOARD_SECRET PROJECT_ROOT; do
+            if output="$(env "$var=" docker compose config 2>&1)"; then
+              echo "compose accepted an empty $var"; exit 1
+            fi
+            # Fail only for the expected reason, not e.g. a YAML error
+            echo "$output" | grep -q "$var" || { echo "$output"; exit 1; }
+          done
+
+      - name: Prepare host directories
+        run: |
+          echo "PUID=$(id -u)" >> "$GITHUB_ENV"
+          echo "PGID=$(id -g)" >> "$GITHUB_ENV"
+          mkdir -p "$PROJECT_ROOT"
+          # Simulate data left behind by an older image that ran as root
+          sudo mkdir -p server/data
+          sudo touch server/data/legacy-root-file
+          sudo chown -R root:root server/data
+
+      - name: Build images
+        run: docker compose build
+
+      - name: Start
+        run: docker compose up -d
+
+      - name: Smoke checks
+        run: .github/scripts/docker-smoke.sh
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop
+        if: always()
+        run: docker compose down -v

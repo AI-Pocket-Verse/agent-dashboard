@@ -1,0 +1,24 @@
+# Keep the build context to sources only: no host dependencies, run history,
+# agent workspaces, secrets or local working files end up in image layers.
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.git
+.github
+.claude
+.omc
+.private
+.tmp
+.playwright-mcp
+**/.env
+**/.env.*
+!**/.env.example
+**/data
+**/runs
+workspace
+docs
+*.log
+.DS_Store
+AGENTS.md
+CLAUDE.md
+ROADMAP.md
