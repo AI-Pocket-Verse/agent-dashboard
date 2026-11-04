@@ -3,6 +3,7 @@ import type { AgentInfo, CodeContext, ExecutionMode, TaskAttachment, WorkflowTem
 import type { TaskMode } from './ModeSelector'
 import type { FsItem } from '../../lib/api'
 import { getAgentDisplayDescription } from '../../lib/agentDescriptions'
+import { createPortal } from 'react-dom'
 import FileBrowserDialog from '../FileBrowserDialog/index'
 import { t } from '../../lib/i18n'
 
@@ -1353,10 +1354,10 @@ export default function TaskForm({
         </div>
       </div>
 
-      {isTemplateModalOpen && (
+      {isTemplateModalOpen && createPortal(
         <div className="fixed inset-0 z-40 flex items-center justify-center px-4">
-          <div className="w-full max-w-[760px] rounded-[34px] border border-black/[0.08] bg-[rgb(247,248,253)] p-5 shadow-none md:p-6">
-            <div className="flex items-start justify-between gap-4">
+          <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-[760px] flex-col rounded-[34px] border border-black/[0.08] bg-[rgb(247,248,253)] p-5 shadow-none md:p-6">
+            <div className="flex shrink-0 items-start justify-between gap-4">
               <div>
                 <h3 className="text-[1.25rem] font-semibold tracking-[-0.03em] text-slate-950">{t('模板选择')}</h3>
               </div>
@@ -1370,7 +1371,7 @@ export default function TaskForm({
               </button>
             </div>
 
-            <div className="mt-5 space-y-2.5">
+            <div className="mt-5 min-h-0 flex-1 space-y-2.5 overflow-y-auto">
               {templates.map(template => (
                 <button
                   key={template.id}
@@ -1410,7 +1411,7 @@ export default function TaskForm({
               ))}
             </div>
 
-            <div className="mt-5 flex items-center justify-between gap-3">
+            <div className="mt-5 flex shrink-0 items-center justify-between gap-3">
               <div className="min-h-[20px] text-sm text-slate-500">
                 {pendingTemplate ? `${t('已选中：')}${t(pendingTemplate.name)}` : t('暂未选择模板')}
               </div>
@@ -1432,13 +1433,14 @@ export default function TaskForm({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {isAgentModalOpen && (
+      {isAgentModalOpen && createPortal(
         <div className="fixed inset-0 z-40 flex items-center justify-center px-4">
-          <div className="w-full max-w-[760px] rounded-[34px] border border-black/[0.08] bg-[rgb(247,248,253)] p-5 shadow-none md:p-6">
-            <div className="flex items-start justify-between gap-4">
+          <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-[760px] flex-col rounded-[34px] border border-black/[0.08] bg-[rgb(247,248,253)] p-5 shadow-none md:p-6">
+            <div className="flex shrink-0 items-start justify-between gap-4">
               <div>
                 <h3 className="text-[1.25rem] font-semibold tracking-[-0.03em] text-slate-950">{t('Agent 选择')}</h3>
               </div>
@@ -1452,6 +1454,7 @@ export default function TaskForm({
               </button>
             </div>
 
+            <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-500">
               <span className="rounded-full border border-slate-200 bg-transparent px-3 py-1">{t('自定义')} {pendingCustomCount}</span>
               <span className="rounded-full border border-slate-200 bg-transparent px-3 py-1">OMC {pendingOmcCount}</span>
@@ -1502,8 +1505,9 @@ export default function TaskForm({
                 )
               })}
             </div>
+            </div>
 
-            <div className="mt-5 flex items-center justify-between gap-3">
+            <div className="mt-5 flex shrink-0 items-center justify-between gap-3">
               <div className="min-h-[20px] text-sm text-slate-500">
                 {pendingSelectedAgents.length > 0 ? t('已选中 {n} 个 Agent', { n: pendingSelectedAgents.length }) : t('暂未选择 Agent')}
               </div>
@@ -1525,13 +1529,14 @@ export default function TaskForm({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {isContextModalOpen && (
+      {isContextModalOpen && createPortal(
         <div className="fixed inset-0 z-40 flex items-center justify-center px-4">
-          <div className="w-full max-w-[760px] rounded-[34px] border border-black/[0.08] bg-[rgb(247,248,253)] p-5 shadow-none md:p-6">
-            <div className="flex items-start justify-between gap-4">
+          <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-[760px] flex-col rounded-[34px] border border-black/[0.08] bg-[rgb(247,248,253)] p-5 shadow-none md:p-6">
+            <div className="flex shrink-0 items-start justify-between gap-4">
               <div>
                 <h3 className="text-[1.25rem] font-semibold tracking-[-0.03em] text-slate-950">{t('代码选择')}</h3>
               </div>
@@ -1545,7 +1550,7 @@ export default function TaskForm({
               </button>
             </div>
 
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            <div className="mt-5 flex shrink-0 flex-wrap items-center justify-between gap-3">
               <div className="text-sm text-slate-500">
                 {codeContext.length > 0 ? t('已添加 {n} 项代码路径', { n: codeContext.length }) : t('还没有添加代码路径')}
               </div>
@@ -1557,14 +1562,14 @@ export default function TaskForm({
               </button>
             </div>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-5 min-h-0 flex-1 space-y-3 overflow-y-auto">
               {pendingContext && (
                 <div className="rounded-[22px] border border-slate-200 bg-transparent px-4 py-4 shadow-none">
                   <div className="truncate font-mono text-xs text-slate-700">{pendingContext.path}</div>
                   <input
                     value={contextDesc}
                     onChange={e => setContextDesc(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleAddContext()}
+                    onKeyDown={e => e.key === 'Enter' && !e.nativeEvent.isComposing && handleAddContext()}
                     placeholder={t('补充说明（可选）...')}
                     className="field-input mt-3 text-sm"
                   />
@@ -1597,7 +1602,7 @@ export default function TaskForm({
               ) : null}
             </div>
 
-            <div className="mt-5 flex items-center justify-end">
+            <div className="mt-5 flex shrink-0 items-center justify-end">
               <button
                 type="button"
                 onClick={handleCloseContextModal}
@@ -1607,7 +1612,8 @@ export default function TaskForm({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {activeError && (

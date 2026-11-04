@@ -36,26 +36,14 @@ import { getAgentDisplayDescription } from '../lib/agentDescriptions'
 import { BUILTIN_TEMPLATES } from '../lib/builtinTemplates'
 import type { WorkflowTemplate } from '../types/index'
 import { computeVerticalDagLayout } from '../lib/workflowLayout'
+import { labelDuplicateNodes, snapshotWorkflow, wouldCreateCycle, type GraphEdgePair } from '../lib/workflowGraph'
+import { useAgents } from '../hooks/useAgents'
+import { useAgentStore } from '../store/agentStore'
+import type { AgentInfo } from '../types/index'
 import axios from 'axios'
-
-const AGENT_OPTIONS: Array<{ name: string; type: 'custom' | 'omc' }> = [
-  { name: 'backend-dev', type: 'custom' },
-  { name: 'frontend-dev', type: 'custom' },
-  { name: 'flutter-dev', type: 'custom' },
-  { name: 'planner', type: 'omc' },
-  { name: 'test-engineer', type: 'omc' },
-  { name: 'designer', type: 'omc' },
-  { name: 'code-reviewer', type: 'omc' },
-  { name: 'security-reviewer', type: 'omc' },
-  { name: 'architect', type: 'omc' },
-  { name: 'writer', type: 'omc' },
-  { name: 'debugger', type: 'omc' },
-]
 
 const NODE_CARD_WIDTH = 184
 const NODE_CARD_HEIGHT = 64
-
-type AgentOption = (typeof AGENT_OPTIONS)[number]
 
 type AgentNodeData = WorkflowCanvasNodeData
 
@@ -111,8 +99,18 @@ type DraftExitAction =
   | { type: 'new-template' }
   | { type: 'duplicate-template'; templateId: string }
 
-const pickDefaultAgent = (type: 'custom' | 'omc'): AgentOption =>
-  AGENT_OPTIONS.find(option => option.type === type) ?? AGENT_OPTIONS[0]
+// 取指定类型下 agent 列表的第一个作为默认值；该类型没有 agent 时返回 undefined
+const pickDefaultAgent = (agents: AgentInfo[], type: 'custom' | 'omc'): AgentInfo | undefined =>
+  agents.find(agent => agent.type === type)
+
+// 规范化快照：节点/连线内容 +（未保存的临时模板）名称与描述，用于判断是否有未保存改动
+const snapshotOf = (
+  nodes: EditableNode[],
+  edges: GraphEdgePair[],
+  transientTemplate?: { name: string; description?: string } | null
+) => `${snapshotWorkflow(nodes, edges)}${
+  transientTemplate ? `|${transientTemplate.name}|${transientTemplate.description ?? ''}` : ''
+}`
 
 const getEditableNodesFromCanvas = (nodes: AgentNode[]): EditableNode[] =>
   nodes.map(node => ({
@@ -123,7 +121,7 @@ const getEditableNodesFromCanvas = (nodes: AgentNode[]): EditableNode[] =>
     promptTemplate: node.data.promptTemplate,
   }))
 
-const edgePairsFromCanvas = (edges: FlowEdge[]) =>
+const edgePairsFromCanvas = (edges: FlowEdge[]): GraphEdgePair[] =>
   edges.map(edge => ({ from: String(edge.source), to: String(edge.target) }))
 
 const getDetachedNodePosition = (nodes: AgentNode[]) => {
@@ -179,6 +177,10 @@ export default function Canvas() {
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance<AgentNode, FlowEdge> | null>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState<AgentNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>([])
+  // 当前模板载入（或上次保存）时的规范化快照，与画布现状比对得到 dirty
+  const [baselineSnapshot, setBaselineSnapshot] = useState<string | null>(null)
+  const agents = useAgentStore(state => state.agents)
+  useAgents()
 
   useEffect(() => {
     api.getTemplates().then(setTemplates).catch(console.error)
@@ -196,8 +198,14 @@ export default function Canvas() {
   const headerTemplateDescription = t(activeTemplate?.description?.trim()
     || draftTemplate?.description?.trim()
     || '将节点按真实依赖关系从上到下组织，分支和汇合会自动展开。')
+  const currentSnapshot = useMemo(() => snapshotOf(
+    getEditableNodesFromCanvas(nodes),
+    edgePairsFromCanvas(edges),
+    activeTemplate?.transient ? activeTemplate : null
+  ), [activeTemplate, edges, nodes])
+  const isDirty = baselineSnapshot !== null && currentSnapshot !== baselineSnapshot
   const hasUnsavedDraft = Boolean(
-    activeTemplate?.transient
+    isDirty
     || (
       draftTemplate
       && (
@@ -207,6 +215,17 @@ export default function Canvas() {
       )
     )
   )
+
+  // 有未保存改动时，关闭或刷新页面前让浏览器提示
+  useEffect(() => {
+    if (!hasUnsavedDraft) return
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedDraft])
 
   useEffect(() => {
     if (isBuiltinTemplate) {
@@ -266,10 +285,25 @@ export default function Canvas() {
     [nodeEditor?.parentId, nodes]
   )
 
-  const editorAgentOptions = useMemo(
-    () => AGENT_OPTIONS.filter(option => option.type === nodeEditor?.agentType),
-    [nodeEditor?.agentType]
-  )
+  // 下拉选项来自真实 agent 列表；当前值不在列表里时作为额外选项保留，保存时原样写回
+  const editorAgentOptions = useMemo(() => {
+    const names = agents.filter(agent => agent.type === nodeEditor?.agentType).map(agent => agent.name)
+    if (nodeEditor?.agentName && !names.includes(nodeEditor.agentName)) names.push(nodeEditor.agentName)
+    return names
+  }, [agents, nodeEditor?.agentName, nodeEditor?.agentType])
+  const editorTypeHasNoAgents = Boolean(nodeEditor) && !agents.some(agent => agent.type === nodeEditor?.agentType)
+
+  // 新增 source→target 是否成环；ignoreEdgeId 为被替换的旧边，判断时先去掉
+  const createsCycle = useCallback((source: string, target: string, ignoreEdgeId?: string) => (
+    wouldCreateCycle(edgePairsFromCanvas(edges.filter(edge => edge.id !== ignoreEdgeId)), source, target)
+  ), [edges])
+
+  // 名称重复的节点追加序号，便于在连线编辑弹窗里区分
+  const nodeLabels = useMemo(() => labelDuplicateNodes(nodes.map(node => ({
+    id: node.id,
+    displayName: node.data.displayName,
+    agentName: node.data.agentName,
+  }))), [nodes])
 
   const edgeEditorError = useMemo(() => {
     if (!edgeEditor) return ''
@@ -280,8 +314,9 @@ export default function Canvas() {
       && String(edge.target) === edgeEditor.target
     ))
     if (duplicate) return t('相同的连线已经存在')
+    if (createsCycle(edgeEditor.source, edgeEditor.target, edgeEditor.edgeId)) return t('这条连线会形成环，工作流无法执行')
     return ''
-  }, [edgeEditor, edges])
+  }, [createsCycle, edgeEditor, edges])
 
   const templateNameConflictError = useMemo(() => {
     if (!templateFormDialog?.name.trim()) return ''
@@ -348,8 +383,10 @@ export default function Canvas() {
     const target = candidate.target
     if (!source || !target) return false
     if (source === target) return false
-    return !hasDuplicateEdge(String(source), String(target), 'id' in candidate ? candidate.id : undefined)
-  }, [hasDuplicateEdge])
+    const ignoreEdgeId = 'id' in candidate ? candidate.id : undefined
+    if (hasDuplicateEdge(String(source), String(target), ignoreEdgeId)) return false
+    return !createsCycle(String(source), String(target), ignoreEdgeId)
+  }, [createsCycle, hasDuplicateEdge])
 
   const applyTemplateToCanvas = useCallback((template: LocalWorkflowTemplate) => {
     setActiveId(template.id)
@@ -366,6 +403,7 @@ export default function Canvas() {
     setHoveredTemplateHint(null)
     setNodes(buildAgentNodes(template.nodes, template.edges, null))
     setEdges(buildCanvasEdges(template.edges))
+    setBaselineSnapshot(snapshotOf(template.nodes, template.edges, template.transient ? template : null))
   }, [buildAgentNodes, setEdges, setNodes])
 
   const clearCanvas = useCallback(() => {
@@ -384,6 +422,7 @@ export default function Canvas() {
     setHoveredTemplateHint(null)
     setNodes([])
     setEdges([])
+    setBaselineSnapshot(null)
   }, [setEdges, setNodes])
 
   const createBlankDraft = useCallback(() => {
@@ -401,6 +440,7 @@ export default function Canvas() {
     setTemplates(prev => [...prev, transientTemplate])
     clearCanvas()
     setActiveId(transientId)
+    setBaselineSnapshot(snapshotOf([], [], transientTemplate))
     setSidebarTab('agents')
   }, [clearCanvas])
 
@@ -438,6 +478,7 @@ export default function Canvas() {
     setHoveredTemplateHint(null)
     setNodes(buildAgentNodes(template.nodes, template.edges, null))
     setEdges(buildCanvasEdges(template.edges))
+    setBaselineSnapshot(snapshotOf(transientTemplate.nodes, transientTemplate.edges, transientTemplate))
   }, [buildAgentNodes, setEdges, setNodes])
 
   const discardUnsavedDraft = useCallback(() => {
@@ -545,6 +586,8 @@ export default function Canvas() {
     if (!connection.source || !connection.target) return
     if (connection.source === connection.target) return
     if (hasDuplicateEdge(connection.source, connection.target, oldEdge.id)) return
+    // 先去掉被替换的旧边再判断是否成环
+    if (createsCycle(connection.source, connection.target, oldEdge.id)) return
 
     setEdges(prev => prev.map(edge => (
       edge.id === oldEdge.id
@@ -554,7 +597,7 @@ export default function Canvas() {
     setSelectedEdgeId(oldEdge.id)
     setContextMenu(null)
     setEdgeContextMenu(null)
-  }, [hasDuplicateEdge, isBuiltinTemplate, setEdges])
+  }, [createsCycle, hasDuplicateEdge, isBuiltinTemplate, setEdges])
 
   const onReconnectEnd = useCallback((
     _event: MouseEvent | TouchEvent,
@@ -587,21 +630,25 @@ export default function Canvas() {
         return
       }
 
+      const payloadNodes = nodes.map(node => ({
+        id: node.id,
+        agentName: node.data.agentName,
+        agentType: node.data.agentType,
+        displayName: node.data.displayName?.trim() || undefined,
+        promptTemplate: node.data.promptTemplate,
+      }))
+      const payloadEdges = edgePairsFromCanvas(edges)
       const saved = await api.updateTemplate({
         ...activeTemplate,
-        nodes: nodes.map(node => ({
-          id: node.id,
-          agentName: node.data.agentName,
-          agentType: node.data.agentType,
-          displayName: node.data.displayName?.trim() || undefined,
-          promptTemplate: node.data.promptTemplate,
-        })),
-        edges: edgePairsFromCanvas(edges),
+        nodes: payloadNodes,
+        edges: payloadEdges,
       })
 
       setTemplates(prev => prev.map(template => (
         template.id === saved.id ? saved : template
       )))
+      // 以实际提交的内容为新基线；保存期间的新改动仍会被识别为未保存
+      setBaselineSnapshot(snapshotOf(payloadNodes, payloadEdges))
       setSidebarTab('templates')
       return
     }
@@ -686,6 +733,7 @@ export default function Canvas() {
       })
       setActiveId(saved.id)
       setDraftTemplate(null)
+      setBaselineSnapshot(snapshotOf(template.nodes, template.edges))
       setSidebarTab('templates')
       setTemplateFormDialog(null)
     } catch (error) {
@@ -762,54 +810,69 @@ export default function Canvas() {
     updateGraph(nextNodes, edgePairsFromCanvas(edges), newId)
   }, [edges, isBuiltinTemplate, nodes, updateGraph])
 
-  const handleDeleteNode = useCallback((nodeId: string) => {
+  // 右键删除与键盘删除共用：删节点会连带清理相关连线并重新布局，只删连线则就地移除
+  const deleteFromCanvas = useCallback((nodeIds: string[], edgeIds: string[]) => {
     if (isBuiltinTemplate) return
-    const nextNodes = getEditableNodesFromCanvas(nodes).filter(node => node.id !== nodeId)
-    const nextEdges = edges.filter(edge => edge.source !== nodeId && edge.target !== nodeId)
-    updateGraph(nextNodes, edgePairsFromCanvas(nextEdges), null)
-  }, [edges, isBuiltinTemplate, nodes, updateGraph])
+    const removedNodes = new Set(nodeIds)
+    const removedEdges = new Set(edgeIds)
+
+    if (removedNodes.size > 0) {
+      const nextNodes = getEditableNodesFromCanvas(nodes).filter(node => !removedNodes.has(node.id))
+      const nextEdges = edges.filter(edge => (
+        !removedEdges.has(edge.id)
+        && !removedNodes.has(String(edge.source))
+        && !removedNodes.has(String(edge.target))
+      ))
+      updateGraph(nextNodes, edgePairsFromCanvas(nextEdges), null)
+      return
+    }
+
+    if (removedEdges.size > 0) {
+      setEdges(prev => prev.filter(edge => !removedEdges.has(edge.id)))
+      setSelectedEdgeId(null)
+      setEdgeContextMenu(null)
+    }
+  }, [edges, isBuiltinTemplate, nodes, setEdges, updateGraph])
+
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    deleteFromCanvas([nodeId], [])
+  }, [deleteFromCanvas])
 
   const handleDeleteEdge = useCallback((edgeId: string) => {
-    if (isBuiltinTemplate) return
-    setEdges(prev => prev.filter(edge => edge.id !== edgeId))
-    setSelectedEdgeId(null)
-    setEdgeContextMenu(null)
-  }, [isBuiltinTemplate, setEdges])
+    deleteFromCanvas([], [edgeId])
+  }, [deleteFromCanvas])
+
+  // 键盘删除：由我们自己走统一删除流程，始终拦下 ReactFlow 的内置删除
+  const handleBeforeDelete = useCallback(async ({ nodes: removedNodes, edges: removedEdges }: {
+    nodes: AgentNode[]
+    edges: FlowEdge[]
+  }) => {
+    deleteFromCanvas(removedNodes.map(node => node.id), removedEdges.map(edge => edge.id))
+    return false
+  }, [deleteFromCanvas])
 
   const openCreateDownstreamEditor = useCallback((nodeId: string) => {
     if (isBuiltinTemplate) return
-    const defaultAgent = pickDefaultAgent('custom')
+    const defaultAgent = pickDefaultAgent(agents, 'custom') ?? pickDefaultAgent(agents, 'omc')
     setNodeEditor({
       nodeId: crypto.randomUUID(),
       mode: 'create',
       parentId: nodeId,
       displayName: '',
-      agentName: defaultAgent.name,
-      agentType: defaultAgent.type,
+      agentName: defaultAgent?.name ?? '',
+      agentType: defaultAgent?.type ?? 'custom',
       promptTemplate: '{{globalPrompt}}',
     })
-  }, [isBuiltinTemplate])
+  }, [agents, isBuiltinTemplate])
 
   const updateNodeEditor = useCallback((patch: Partial<NodeEditorState>) => {
-    setNodeEditor(prev => {
-      if (!prev) return null
-
-      const next = { ...prev, ...patch }
-      const matchedAgent = AGENT_OPTIONS.find(option => option.name === next.agentName && option.type === next.agentType)
-
-      if (!matchedAgent) {
-        const fallbackAgent = pickDefaultAgent(next.agentType)
-        next.agentName = fallbackAgent.name
-        next.agentType = fallbackAgent.type
-      }
-
-      return next
-    })
+    // 只合并用户的改动；不再因当前 agent 不在列表里而改写 agent
+    setNodeEditor(prev => (prev ? { ...prev, ...patch } : null))
   }, [])
 
   const handleConfirmNodeEditor = useCallback(() => {
     if (isBuiltinTemplate) return
-    if (!nodeEditor) return
+    if (!nodeEditor || !nodeEditor.agentName) return
 
     const nextNodes = getEditableNodesFromCanvas(nodes)
     const nextEdges = edgePairsFromCanvas(edges)
@@ -996,9 +1059,7 @@ export default function Canvas() {
         if (contextMenu) setContextMenu(null)
         if (edgeContextMenu) setEdgeContextMenu(null)
         if (templateContextMenu) setTemplateContextMenu(null)
-        if (templateFormDialog) setTemplateFormDialog(null)
-        if (templateDeleteDialog) setTemplateDeleteDialog(null)
-        if (draftExitAction) setDraftExitAction(null)
+        // 弹窗的遮罩点击由 DialogShell 自己判断（mousedown 与 click 都在遮罩上才关闭），这里不再统一关闭
       }}
       onContextMenu={event => event.preventDefault()}
     >
@@ -1103,13 +1164,23 @@ export default function Canvas() {
               <div className="mb-2.5 flex items-center justify-between gap-3">
                 <div className="text-[13px] font-semibold uppercase tracking-[0.12em] text-black">{t('添加节点')}</div>
                 <div className="rounded-full border border-black/10 bg-transparent px-2.5 py-1 text-[10px] font-semibold text-black">
-                  {AGENT_OPTIONS.length} {t('项')}
+                  {agents.length} {t('项')}
                 </div>
               </div>
               <div className="min-h-0 space-y-2 overflow-y-auto pr-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {AGENT_OPTIONS.map(agent => (
+                {(['custom', 'omc'] as const)
+                  .filter(type => !agents.some(agent => agent.type === type))
+                  .map(type => (
+                    <div
+                      key={type}
+                      className="rounded-[18px] border border-dashed border-black/10 px-3 py-2.5 text-[12px] text-slate-400"
+                    >
+                      {type === 'custom' ? t('暂无自定义 Agent') : t('暂无 OMC Agent')}
+                    </div>
+                  ))}
+                {agents.map(agent => (
                   <button
-                    key={agent.name}
+                    key={`${agent.type}:${agent.name}`}
                     onClick={() => addAgentNode(agent.name, agent.type)}
                     disabled={isBuiltinTemplate}
                     className="flex w-full items-center justify-between rounded-[18px] border border-black/10 bg-transparent px-3 py-2.5 text-left text-[13px] text-black transition hover:border-black/30 disabled:cursor-not-allowed disabled:border-black/8 disabled:text-slate-400"
@@ -1226,6 +1297,8 @@ export default function Canvas() {
                 connectionLineStyle={{ stroke: 'rgba(17,17,20,0.28)', strokeWidth: 1.45 }}
                 connectionRadius={42}
                 nodesDraggable={!isBuiltinTemplate}
+                deleteKeyCode={isBuiltinTemplate ? null : undefined}
+                onBeforeDelete={handleBeforeDelete}
                 edgesReconnectable={!isBuiltinTemplate}
                 onInit={setReactFlowInstance}
               >
@@ -1417,7 +1490,12 @@ export default function Canvas() {
             <button type="button" onClick={() => setNodeEditor(null)} className="btn-secondary h-10 px-4 py-0 text-sm">
               {t('取消')}
             </button>
-            <button type="button" onClick={handleConfirmNodeEditor} className="btn-primary h-10 px-5 py-0 text-sm">
+            <button
+              type="button"
+              onClick={handleConfirmNodeEditor}
+              disabled={!nodeEditor?.agentName}
+              className="btn-primary h-10 px-5 py-0 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            >
               {t('确认')}
             </button>
           </>
@@ -1446,8 +1524,10 @@ export default function Canvas() {
                     key={option.value}
                     type="button"
                     onClick={() => {
-                      const fallbackAgent = pickDefaultAgent(option.value)
-                      updateNodeEditor({ agentType: option.value, agentName: fallbackAgent.name })
+                      // 只有真正切换类型时才重选该类型的默认 agent
+                      if (nodeEditor.agentType === option.value) return
+                      const defaultAgent = pickDefaultAgent(agents, option.value)
+                      updateNodeEditor({ agentType: option.value, agentName: defaultAgent?.name ?? '' })
                     }}
                     className={`rounded-[16px] border px-3 py-2.5 text-sm font-medium transition ${
                       nodeEditor.agentType === option.value
@@ -1465,19 +1545,20 @@ export default function Canvas() {
               <div className="mb-1.5 text-[12px] font-medium text-slate-500">Agent</div>
               <select
                 value={nodeEditor.agentName}
-                onChange={event => {
-                  const selectedAgent = AGENT_OPTIONS.find(option => option.name === event.target.value)
-                  if (!selectedAgent) return
-                  updateNodeEditor({ agentName: selectedAgent.name, agentType: selectedAgent.type })
-                }}
+                onChange={event => updateNodeEditor({ agentName: event.target.value })}
                 className="field-input appearance-none"
               >
-                {editorAgentOptions.map(option => (
-                  <option key={option.name} value={option.name}>
-                    {option.name}
+                {editorAgentOptions.map(name => (
+                  <option key={name} value={name}>
+                    {name}
                   </option>
                 ))}
               </select>
+              {editorTypeHasNoAgents && (
+                <div className="mt-1.5 text-[12px] text-slate-400">
+                  {nodeEditor.agentType === 'custom' ? t('暂无自定义 Agent') : t('暂无 OMC Agent')}
+                </div>
+              )}
               <div className="mt-1.5 text-[12px] text-slate-500">
                 {getAgentDisplayDescription({ name: nodeEditor.agentName, type: nodeEditor.agentType, description: '' })}
               </div>
@@ -1529,7 +1610,7 @@ export default function Canvas() {
               >
                 {nodes.map(node => (
                   <option key={node.id} value={node.id}>
-                    {node.data.displayName || node.data.agentName}
+                    {nodeLabels.get(node.id) ?? (node.data.displayName || node.data.agentName)}
                   </option>
                 ))}
               </select>
@@ -1544,7 +1625,7 @@ export default function Canvas() {
               >
                 {nodes.map(node => (
                   <option key={node.id} value={node.id}>
-                    {node.data.displayName || node.data.agentName}
+                    {nodeLabels.get(node.id) ?? (node.data.displayName || node.data.agentName)}
                   </option>
                 ))}
               </select>

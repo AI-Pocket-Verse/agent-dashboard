@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { t } from '../../lib/i18n'
 
 interface Props {
@@ -16,6 +17,9 @@ interface Props {
   hideCloseButton?: boolean
 }
 
+// 已打开的弹窗栈：Esc 只关闭最上层（最后挂载）的一个
+const openDialogStack: Array<{ current: () => void }> = []
+
 export default function DialogShell({
   open,
   onClose,
@@ -30,12 +34,41 @@ export default function DialogShell({
   headerActions,
   hideCloseButton = false,
 }: Props) {
+  // 记录 mousedown 是否落在遮罩本身：在输入框内拖选文字后松开在遮罩上，不应关闭
+  const pressedOnOverlay = useRef(false)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
+  useEffect(() => {
+    if (!open) return
+    const entry = { current: () => onCloseRef.current() }
+    openDialogStack.push(entry)
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.isComposing) return
+      if (openDialogStack[openDialogStack.length - 1] !== entry) return
+      onCloseRef.current()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      const index = openDialogStack.indexOf(entry)
+      if (index >= 0) openDialogStack.splice(index, 1)
+    }
+  }, [open])
+
   if (!open) return null
 
-  return (
+  // 挂到 body：宿主页面有 transform 祖先时，position:fixed 会相对该祖先定位，弹窗被裁出视口
+  return createPortal(
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center px-4 py-8 ${overlayClassName}`}
-      onClick={onClose}
+      onMouseDown={event => { pressedOnOverlay.current = event.target === event.currentTarget }}
+      onClick={event => {
+        if (event.target === event.currentTarget && pressedOnOverlay.current) onClose()
+        pressedOnOverlay.current = false
+      }}
       onContextMenu={event => event.preventDefault()}
     >
       <div
@@ -71,6 +104,7 @@ export default function DialogShell({
           {footer && <div className="flex items-center justify-end gap-2.5">{footer}</div>}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
