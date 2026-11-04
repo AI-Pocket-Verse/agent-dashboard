@@ -14,7 +14,9 @@ import {
   useNodesState,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { useBlocker } from 'react-router-dom'
 import ContextMenu from '../components/ContextMenu/index'
+import AgentLoadError from '../components/AgentLoadError/index'
 import DialogShell from '../components/DialogShell/index'
 import WorkflowInspector from '../components/WorkflowInspector/index'
 import { t } from '../lib/i18n'
@@ -240,6 +242,12 @@ export default function Canvas() {
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [hasUnsavedDraft])
+
+  // 站内跳转（侧栏导航、浏览器后退、代码 navigate）同样要拦：目标路径与当前页相同时不拦
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => (
+    hasUnsavedDraft && currentLocation.pathname !== nextLocation.pathname
+  ))
+  const isLeaveBlocked = blocker.state === 'blocked'
 
   useEffect(() => {
     if (isBuiltinTemplate) {
@@ -532,6 +540,22 @@ export default function Canvas() {
 
     executeDraftExitAction(action)
   }, [executeDraftExitAction, hasUnsavedDraft])
+
+  // 草稿弹窗同时服务两类入口：画布内切换模板（draftExitAction）与站内跳转（blocker）
+  const cancelDraftExit = useCallback(() => {
+    if (blocker.state === 'blocked') blocker.reset()
+    setDraftExitAction(null)
+  }, [blocker])
+
+  const confirmDraftExit = useCallback(() => {
+    if (blocker.state === 'blocked') {
+      blocker.proceed()
+      return
+    }
+    if (!draftExitAction) return
+    executeDraftExitAction(draftExitAction)
+    setDraftExitAction(null)
+  }, [blocker, draftExitAction, executeDraftExitAction])
 
   const addAgentNode = useCallback((agentName: string, type: 'custom' | 'omc') => {
     if (isBuiltinTemplate) return
@@ -1195,6 +1219,7 @@ export default function Canvas() {
                   {agents.length} {t('项')}
                 </div>
               </div>
+              <AgentLoadError className="mb-2" />
               <div className="min-h-0 space-y-2 overflow-y-auto pr-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {(['custom', 'omc'] as const)
                   .filter(type => !agents.some(agent => agent.type === type))
@@ -1474,23 +1499,19 @@ export default function Canvas() {
       </DialogShell>
 
       <DialogShell
-        open={Boolean(draftExitAction)}
-        onClose={() => setDraftExitAction(null)}
+        open={Boolean(draftExitAction) || isLeaveBlocked}
+        onClose={cancelDraftExit}
         maxWidthClassName="max-w-[420px]"
         title={t('放弃未保存草稿')}
         description={t('当前草稿还没有保存，继续操作会丢失这些改动。')}
         footer={(
           <>
-            <button type="button" onClick={() => setDraftExitAction(null)} className="btn-secondary h-10 px-4 py-0 text-sm">
+            <button type="button" onClick={cancelDraftExit} className="btn-secondary h-10 px-4 py-0 text-sm">
               {t('继续编辑')}
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (!draftExitAction) return
-                executeDraftExitAction(draftExitAction)
-                setDraftExitAction(null)
-              }}
+              onClick={confirmDraftExit}
               className="btn-primary h-10 bg-rose-600 px-5 py-0 text-sm text-white hover:bg-rose-700"
             >
               {t('放弃草稿')}

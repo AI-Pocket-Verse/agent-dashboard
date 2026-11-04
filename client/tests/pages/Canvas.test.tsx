@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import '../helpers/dataRouterEnv'
 import Canvas from '../../src/pages/Canvas'
 import { api } from '../../src/lib/api'
 import { BUILTIN_TEMPLATES } from '../../src/lib/builtinTemplates'
@@ -79,7 +81,19 @@ const setStoreAgents = (agents: AgentInfo[]) => {
   vi.mocked(api.getAgents).mockResolvedValue(agents)
 }
 
-const renderCanvas = () => render(<Canvas />)
+// Canvas 使用 useBlocker，必须挂在 data router 下；/other 用于验证站内跳转
+const renderCanvasRouter = (entries = ['/canvas']) => {
+  const router = createMemoryRouter(
+    [
+      { path: '/canvas', element: <Canvas /> },
+      { path: '/other', element: <p>Other page</p> },
+    ],
+    { initialEntries: entries, initialIndex: entries.length - 1, future: { v7_relativeSplatPath: true } }
+  )
+  const utils = render(<RouterProvider router={router} future={{ v7_startTransition: true }} />)
+  return { router, ...utils }
+}
+const renderCanvas = () => renderCanvasRouter()
 
 const loadTemplate = async (name: RegExp) => {
   fireEvent.click(await screen.findByRole('button', { name }))
@@ -383,6 +397,96 @@ describe('Canvas unsaved-change protection', () => {
     const afterUnmount = new Event('beforeunload', { cancelable: true })
     window.dispatchEvent(afterUnmount)
     expect(afterUnmount.defaultPrevented).toBe(false)
+  })
+})
+
+describe('Canvas in-app navigation blocker', () => {
+  it('lets in-app navigation through when nothing changed', async () => {
+    const { router } = renderCanvasRouter()
+    await loadTemplate(/^模板A/)
+
+    await act(async () => { await router.navigate('/other') })
+
+    expect(screen.queryByText(DISCARD_TITLE)).not.toBeInTheDocument()
+    expect(screen.getByText('Other page')).toBeInTheDocument()
+  })
+
+  it('blocks navigation with unsaved changes, and stays on the page when cancelled', async () => {
+    const { router } = renderCanvasRouter()
+    await loadTemplate(/^模板A/)
+    connect('n1', 'n3')
+
+    await act(async () => { await router.navigate('/other') })
+
+    expect(screen.getByText(DISCARD_TITLE)).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/canvas')
+
+    fireEvent.click(screen.getByRole('button', { name: '继续编辑' }))
+    expect(screen.queryByText(DISCARD_TITLE)).not.toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/canvas')
+    expect(rf.edges).toHaveLength(3)
+
+    // 取消后仍然处于拦截状态，再次跳转依旧弹窗
+    await act(async () => { await router.navigate('/other') })
+    expect(screen.getByText(DISCARD_TITLE)).toBeInTheDocument()
+  })
+
+  it('proceeds with the navigation when the user discards the draft', async () => {
+    const { router } = renderCanvasRouter()
+    await loadTemplate(/^模板A/)
+    connect('n1', 'n3')
+
+    await act(async () => { await router.navigate('/other') })
+    fireEvent.click(screen.getByRole('button', { name: '放弃草稿' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/other'))
+    expect(screen.getByText('Other page')).toBeInTheDocument()
+  })
+
+  it('blocks browser back navigation as well', async () => {
+    const { router } = renderCanvasRouter(['/other', '/canvas'])
+    await loadTemplate(/^模板A/)
+    connect('n1', 'n3')
+
+    await act(async () => { await router.navigate(-1) })
+
+    expect(screen.getByText(DISCARD_TITLE)).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/canvas')
+    fireEvent.click(screen.getByRole('button', { name: '继续编辑' }))
+    expect(router.state.location.pathname).toBe('/canvas')
+  })
+
+  it('stops blocking once the template has been saved', async () => {
+    vi.mocked(api.updateTemplate).mockClear()
+    const { router } = renderCanvasRouter()
+    await loadTemplate(/^模板A/)
+    connect('n1', 'n3')
+    fireEvent.click(screen.getByRole('button', { name: '保存模板' }))
+    await waitFor(() => expect(api.updateTemplate).toHaveBeenCalledTimes(1))
+    await act(async () => {})
+
+    await act(async () => { await router.navigate('/other') })
+
+    expect(screen.queryByText(DISCARD_TITLE)).not.toBeInTheDocument()
+    expect(screen.getByText('Other page')).toBeInTheDocument()
+  })
+})
+
+describe('Canvas agent list load failure', () => {
+  it('shows the reason and a retry button in the add-node panel, and retry reloads the agents', async () => {
+    vi.mocked(api.getAgents).mockRejectedValue({ response: { status: 503 } })
+    useAgentStore.setState({ loadError: null })
+    renderCanvas()
+    fireEvent.click(await screen.findByRole('button', { name: '添加节点' }))
+
+    expect(await screen.findByText('Agent 列表加载失败')).toBeInTheDocument()
+    expect(screen.getByText('HTTP 503')).toBeInTheDocument()
+
+    vi.mocked(api.getAgents).mockResolvedValue(STORE_AGENTS)
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+
+    await waitFor(() => expect(screen.queryByText('Agent 列表加载失败')).not.toBeInTheDocument())
+    expect(screen.getByText('my-agent')).toBeInTheDocument()
   })
 })
 

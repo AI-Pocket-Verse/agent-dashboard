@@ -103,7 +103,6 @@ const EN: Record<string, string> = {
   // ── Status / logs ──
   '日志加载失败': 'Failed to load logs',
   '已显示': 'Showing',
-  '条日志': 'logs',
   '等待执行该节点': 'Waiting for this node to run',
   '点击一个节点查看详情': 'Click a node to view details',
   '说明': 'Description',
@@ -228,7 +227,6 @@ const EN: Record<string, string> = {
   '个节点': 'nodes',
   '取消于：': 'Canceled at: ',
   '原因：': 'Reason: ',
-  '暂无运行中的任务 - 去 Dashboard 发起一个新的协作流程': 'No running tasks — start a new workflow from the Dashboard',
 
   // ── Runner page ──
   '已运行': 'Elapsed',
@@ -376,4 +374,5 @@ const EN: Record<string, string> = {
   '流程已终止': 'Workflow terminated.',
   '{n} 分钟': '{n} min',
   '{n} 秒': '{n} s',
+  'Agent 列表加载失败': 'Failed to load the agent list',
 }

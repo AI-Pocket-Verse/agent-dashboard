@@ -187,8 +187,8 @@ export interface AiSelectResponse {
 }
 
 // ─── Built-in OMC agents ────────────────────────────────────────────────────────
-// Single source of truth shared by the server (/api/agents), the client store,
-// and the vite dev middleware. Descriptions are fallbacks — the client's
+// Single source of truth shared by the server (/api/agents) and the client
+// store. Descriptions are fallbacks — the client's
 // AGENT_DESCRIPTION_MAP overrides them for display and the i18n dictionary
 // translates these exact strings.
 
@@ -202,6 +202,10 @@ export const OMC_AGENTS: AgentInfo[] = [
   { name: 'writer', type: 'omc', description: '文档整理', status: 'idle' },
   { name: 'debugger', type: 'omc', description: '问题排查', status: 'idle' },
 ]
+
+// ─── Builtin templates ────────────────────────────────────────────────────────
+// 所有别名都指向本文件，故在此统一再导出
+export * from './templates.js'
 
 // 服务端写入节点日志的系统行编码（`[system:<code>] <English text>`）。服务端只写这些，
 // 下游提示词只过滤这些，前端只本地化这些；agent 自己输出的其他 `[system:...]` 行原样保留。

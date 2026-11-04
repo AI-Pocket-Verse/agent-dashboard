@@ -4,6 +4,7 @@ import type { TaskMode } from './ModeSelector'
 import type { FsItem } from '../../lib/api'
 import { getAgentDisplayDescription } from '../../lib/agentDescriptions'
 import { createPortal } from 'react-dom'
+import AgentLoadError from '../AgentLoadError/index'
 import FileBrowserDialog from '../FileBrowserDialog/index'
 import { t } from '../../lib/i18n'
 
@@ -1459,6 +1460,8 @@ export default function TaskForm({
               <span className="rounded-full border border-slate-200 bg-transparent px-3 py-1">{t('自定义')} {pendingCustomCount}</span>
               <span className="rounded-full border border-slate-200 bg-transparent px-3 py-1">OMC {pendingOmcCount}</span>
             </div>
+
+            <AgentLoadError className="mt-4" />
 
             <div className="mt-5 grid gap-3 md:grid-cols-2">
               {(['custom', 'omc'] as const).map(type => {

@@ -117,15 +117,6 @@ code {
     background: transparent;
   }
 
-  .section-kicker {
-    margin-bottom: 0.55rem;
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-
   .page-title {
     font-size: clamp(2rem, 3.8vw, 4.35rem);
     line-height: 0.98;
