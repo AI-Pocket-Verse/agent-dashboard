@@ -43,6 +43,43 @@ describe('template routes', () => {
     await app.close()
   })
 
+  it('PUT uses the URL id, rejects built-ins, missing templates and bad names', async () => {
+    const { buildApp } = await import('../../src/index.js')
+    const { BUILTIN_TEMPLATES } = await import('../../src/workflows/templates.js')
+    const { app } = await buildApp()
+    const headers = { Authorization: 'Bearer test' }
+    const edges = [cyclic[0]]
+
+    const created = JSON.parse((await app.inject({ method: 'POST', url: '/api/templates', headers, payload: { name: 'put-target', nodes, edges } })).body)
+
+    // body.id 与 URL 不一致：以 URL 为准，不得新建/覆盖其他 id
+    const renamed = await app.inject({ method: 'PUT', url: `/api/templates/${created.id}`, headers, payload: { ...created, id: 'other-id', name: 'put-renamed' } })
+    expect(renamed.statusCode).toBe(200)
+    expect(JSON.parse(renamed.body).id).toBe(created.id)
+    const list = JSON.parse((await app.inject({ method: 'GET', url: '/api/templates', headers })).body)
+    expect(list.some((t: { id: string }) => t.id === 'other-id')).toBe(false)
+    expect(list.find((t: { id: string }) => t.id === created.id).name).toBe('put-renamed')
+
+    // 缺 name / 非字符串 / 空白：400
+    for (const name of [undefined, 123, '   ']) {
+      const res = await app.inject({ method: 'PUT', url: `/api/templates/${created.id}`, headers, payload: { nodes, edges, name } })
+      expect(res.statusCode, String(name)).toBe(400)
+    }
+    const postBad = await app.inject({ method: 'POST', url: '/api/templates', headers, payload: { nodes, edges } })
+    expect(postBad.statusCode).toBe(400)
+
+    // 内置模板不可改
+    const builtin = BUILTIN_TEMPLATES[0]
+    const forbidden = await app.inject({ method: 'PUT', url: `/api/templates/${builtin.id}`, headers, payload: { ...builtin, name: 'hacked-builtin' } })
+    expect(forbidden.statusCode).toBe(403)
+    expect(JSON.parse(forbidden.body).error).toContain('built-in')
+
+    // 不存在：404
+    const missing = await app.inject({ method: 'PUT', url: '/api/templates/no-such-id', headers, payload: { name: 'ghost', nodes, edges } })
+    expect(missing.statusCode).toBe(404)
+    await app.close()
+  })
+
   it('ships only valid DAGs as built-in templates', async () => {
     const { BUILTIN_TEMPLATES } = await import('../../src/workflows/templates.js')
     const { assertValidDag } = await import('../../src/workflows/graph.js')

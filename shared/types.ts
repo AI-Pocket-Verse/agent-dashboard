@@ -202,3 +202,8 @@ export const OMC_AGENTS: AgentInfo[] = [
   { name: 'writer', type: 'omc', description: '文档整理', status: 'idle' },
   { name: 'debugger', type: 'omc', description: '问题排查', status: 'idle' },
 ]
+
+// 服务端写入节点日志的系统行编码（`[system:<code>] <English text>`）。服务端只写这些，
+// 下游提示词只过滤这些，前端只本地化这些；agent 自己输出的其他 `[system:...]` 行原样保留。
+export const SYSTEM_LOG_CODES = ['run_timeout', 'spawn_failed', 'interrupted', 'user_note', 'run_terminated'] as const
+export type SystemLogCode = typeof SYSTEM_LOG_CODES[number]

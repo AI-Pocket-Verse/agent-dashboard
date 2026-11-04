@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { existsSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import Database from 'better-sqlite3'
 import { PersistenceStore } from '../../src/store/persistence.js'
@@ -64,7 +64,7 @@ describe('PersistenceStore', () => {
     expect(running?.rounds?.[0].status).toBe('failed')
     expect(running?.nodes.map(n => n.status)).toEqual(['completed', 'failed', 'pending'])
     expect(running?.nodes[1].finishedAt).toBe(100)
-    expect(running?.nodes[1].logs.at(-1)).toBe('[系统] 服务重启，执行已中断')
+    expect(running?.nodes[1].logs.at(-1)).toBe('[system:interrupted] Service restarted; execution interrupted.')
 
     const waiting = await store.loadRun('r-waiting')
     expect(waiting?.rounds?.[0].status).toBe('failed')
@@ -272,5 +272,26 @@ describe('PersistenceStore', () => {
       activeRoundId: 'round-1',
       rounds: [{ id: 'round-1', status: run.status }],
     })
+  })
+})
+
+describe('PersistenceStore legacy JSON migration', () => {
+  const LEGACY_DIR = '/tmp/agent-dashboard-test-store-legacy'
+  afterEach(() => { if (existsSync(LEGACY_DIR)) rmSync(LEGACY_DIR, { recursive: true }) })
+
+  it('imports runs from an old runs.json, including autoFixRound', async () => {
+    mkdirSync(LEGACY_DIR, { recursive: true })
+    const legacy: WorkflowRun[] = [
+      { id: 'old-1', name: 'old', prompt: 'p', status: 'completed', nodes: [], edges: [], requireConfirm: true, autoFixRound: 2, createdAt: 1, completedAt: 2 },
+      { id: 'old-2', name: 'old2', status: 'failed', nodes: [], edges: [], requireConfirm: false, createdAt: 3 },
+    ]
+    writeFileSync(join(LEGACY_DIR, 'runs.json'), JSON.stringify(legacy))
+    const store = new PersistenceStore(LEGACY_DIR)
+    const runs = await store.loadRuns()
+    store.close()
+    expect(runs.map(r => r.id).sort()).toEqual(['old-1', 'old-2'])
+    expect(runs.find(r => r.id === 'old-1')?.autoFixRound).toBe(2)
+    expect(runs.find(r => r.id === 'old-1')?.requireConfirm).toBe(true)
+    expect(runs.find(r => r.id === 'old-2')?.autoFixRound).toBeUndefined()
   })
 })

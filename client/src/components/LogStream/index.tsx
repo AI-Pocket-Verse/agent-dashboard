@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import StreamingText from '../StreamingText/index'
 import { compactAdjacentLogBlocks } from '../../lib/logDisplay'
 import { api } from '../../lib/api'
-import { t } from '../../lib/i18n'
+import { t, useLocaleStore } from '../../lib/i18n'
 import { useWorkflowStore } from '../../store/workflowStore'
 
 interface Props {
@@ -52,11 +52,14 @@ export default function LogStream({ runId, roundId, nodeId, logs, logCount, agen
     setLoadedStart(prev => Math.min(prev, initialStart))
   }, [logCount, logs])
 
+  // 系统日志行按当前语言本地化，切换语言时需要重新计算
+  const locale = useLocaleStore(s => s.locale)
   const displayLogs = useMemo(
     () => compactAdjacentLogBlocks(
       loadedLogs.length > 2000 ? loadedLogs.slice(-2000) : loadedLogs
     ),
-    [loadedLogs]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- locale 经 t() 间接参与计算
+    [loadedLogs, locale]
   )
   const logText = displayLogs.join('\n')
   const displayText = logText || (status === 'running' ? t('执行中...') : '')

@@ -2,8 +2,9 @@ import Database from 'better-sqlite3'
 import { existsSync, mkdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import type { NodeRun, WorkflowRound, WorkflowRun, WorkflowTemplate, RunNodeLogsPage } from '@agent-dashboard/shared'
+import { systemLine } from '../systemLog.js'
 
-const INTERRUPTED_LOG_LINE = '[系统] 服务重启，执行已中断'
+const INTERRUPTED_LOG_LINE = systemLine('interrupted', 'Service restarted; execution interrupted.')
 
 type TemplateRow = {
   id: string
@@ -456,6 +457,7 @@ export class PersistenceStore {
           active_round_id,
           attachments_json,
           require_confirm,
+          auto_fix_round,
           created_at,
           completed_at
         ) VALUES (
@@ -472,6 +474,7 @@ export class PersistenceStore {
           @active_round_id,
           @attachments_json,
           @require_confirm,
+          @auto_fix_round,
           @created_at,
           @completed_at
         )

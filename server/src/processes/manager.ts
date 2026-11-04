@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from 'fs'
 import { basename, join } from 'path'
 import type { CodeContext, SavedAttachment, TaskAttachment } from '@agent-dashboard/shared'
 import { killProcessGroup, processGroupSpawnOptions } from './processGroup.js'
+import { systemLine } from '../systemLog.js'
 
 type LogCallback = (nodeId: string, line: string) => void
 type CompleteCallback = (nodeId: string, exitCode: number) => void
@@ -24,7 +25,7 @@ const DEFAULT_MAX_RUN_MS = 30 * 60_000
 const DEFAULT_KILL_GRACE_MS = 5_000
 
 function formatDuration(ms: number): string {
-  return ms >= 60_000 ? `${ms / 60_000} 分钟` : `${ms / 1000} 秒`
+  return ms >= 60_000 ? `${ms / 60_000} min` : `${ms / 1000} s`
 }
 
 export class ProcessManager {
@@ -105,8 +106,8 @@ export class ProcessManager {
       entry.timers.push(setTimeout(() => {
         if (!this.processes.has(key)) return
         entry.timedOut = true
-        // [系统] 行不会进入下游提示词（getNodeOutputTranscript 会过滤）
-        onLog(nodeId, `[系统] 运行时间超过上限（${formatDuration(this.maxRunMs)}），已终止。可通过 MAX_RUN_MINUTES 调整。`)
+        // 系统行不会进入下游提示词（getNodeOutputTranscript 会过滤）；前端按 code 本地化
+        onLog(nodeId, systemLine('run_timeout', `Stopped after exceeding the ${formatDuration(this.maxRunMs)} limit. Adjust MAX_RUN_MINUTES to change it.`))
         this.terminate(entry)
       }, this.maxRunMs))
     }
@@ -119,7 +120,7 @@ export class ProcessManager {
     proc.stderr?.on('data', handleData)
 
     proc.on('error', (err: NodeJS.ErrnoException) => {
-      onLog(nodeId, `[系统] 无法启动 claude（${err.code ?? err.message}）：${this.claudeBin}，请检查 CLAUDE_BIN 或 PATH。`)
+      onLog(nodeId, systemLine('spawn_failed', `Cannot start claude (${err.code ?? err.message}): ${this.claudeBin}. Check CLAUDE_BIN or PATH.`))
       complete(1)
     })
 

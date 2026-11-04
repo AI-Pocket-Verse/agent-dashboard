@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { readdirSync, statSync, existsSync, readFileSync } from 'fs'
-import { join, dirname, resolve, relative, sep } from 'path'
+import { join, dirname, resolve, relative, sep, isAbsolute } from 'path'
 import { config } from '../config.js'
 import type { PersistenceStore } from '../store/persistence.js'
 
@@ -27,7 +27,9 @@ const MAX_TEXT_FILE_BYTES = 1024 * 1024
 
 function isPathInside(parent: string, child: string) {
   const rel = relative(parent, child)
-  return rel === '' || (!!rel && !rel.startsWith('..') && !rel.startsWith(sep))
+  // 只有 rel 恰为 `..`、以 `..` + 分隔符开头或为绝对路径才算越界；`..foo` 之类的合法文件名不受影响
+  const escapes = rel === '..' || rel.startsWith('..' + sep) || isAbsolute(rel)
+  return !escapes
 }
 
 function normalizeWorkspacePath(path: string) {

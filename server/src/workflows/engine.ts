@@ -6,6 +6,7 @@ import type { PersistenceStore } from '../store/persistence.js'
 import { getLogPage } from '../store/persistence.js'
 import { FileWatcher } from './fileWatcher.js'
 import { assertValidDag } from './graph.js'
+import { systemLine, isSystemLogLine } from '../systemLog.js'
 
 // ─── Auto-fix loop config ─────────────────────────────────────────────────────
 
@@ -117,7 +118,7 @@ export function compactAdjacentLogBlocks(logs: string[]): string[] {
 
 export function getNodeOutputTranscript(logs: string[]): string {
   return compactAdjacentLogBlocks(logs)
-    .filter(line => !line.trim().startsWith('[系统]'))
+    .filter(line => !isSystemLogLine(line))
     .filter(line => line.trim())
     .slice(-120)
     .join('\n')
@@ -381,8 +382,9 @@ export class DAGEngine {
             nextNode.prompt += instructionBlock
           }
         })
-        node.logs.push(`用户确认补充：${trimmedInstruction}`)
-        this.broadcast({ type: 'agent:log', payload: { runId, roundId, nodeId, line: `用户确认补充：${trimmedInstruction}` } })
+        const noteLine = systemLine('user_note', `User confirmation note: ${trimmedInstruction}`)
+        node.logs.push(noteLine)
+        this.broadcast({ type: 'agent:log', payload: { runId, roundId, nodeId, line: noteLine } })
       }
       node.status = 'completed'
       this.setRunRoundStatus(run, 'running')
@@ -423,8 +425,9 @@ export class DAGEngine {
         }
         n.status = 'failed'
         n.finishedAt = Date.now()
-        n.logs.push('流程已终止')
-        this.broadcast({ type: 'agent:log', payload: { runId, roundId, nodeId: n.id, line: '流程已终止' } })
+        const terminatedLine = systemLine('run_terminated', 'Workflow terminated.')
+        n.logs.push(terminatedLine)
+        this.broadcast({ type: 'agent:log', payload: { runId, roundId, nodeId: n.id, line: terminatedLine } })
         this.broadcast({ type: 'workflow:node_status', payload: { runId, roundId, nodeId: n.id, status: 'failed', finishedAt: n.finishedAt } })
         this.persistSnapshot(run)
       })

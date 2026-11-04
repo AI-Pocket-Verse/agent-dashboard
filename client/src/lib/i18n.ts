@@ -367,4 +367,13 @@ const EN: Record<string, string> = {
   '刷新': 'Refresh',
   '删除失败，请稍后重试': 'Failed to delete, please try again later',
   '返回创建页': 'Back to Create',
+  // ── Server system log lines ([system:<code>]) ──
+  '[系统]': '[system]',
+  '运行时间超过上限（{duration}），已终止。可通过 MAX_RUN_MINUTES 调整。': 'Stopped after exceeding the {duration} limit. Adjust MAX_RUN_MINUTES to change it.',
+  '无法启动 claude（{code}）：{bin}，请检查 CLAUDE_BIN 或 PATH。': 'Cannot start claude ({code}): {bin}. Check CLAUDE_BIN or PATH.',
+  '服务重启，执行已中断': 'Service restarted; execution interrupted.',
+  '用户确认补充：{text}': 'User confirmation note: {text}',
+  '流程已终止': 'Workflow terminated.',
+  '{n} 分钟': '{n} min',
+  '{n} 秒': '{n} s',
 }

@@ -89,4 +89,72 @@ describe('run workspace files routes', () => {
     expect(contentBody.content).toBe('export const answer = 42\n')
     await app.close()
   })
+  // 以真实路由创建一个 run，返回其工作区目录
+  async function createRun(app: Awaited<ReturnType<typeof buildTestApp>>['app'], id: string, workspacePath: string) {
+    const runDir = join(TEST_ROOT, 'workspace', workspacePath)
+    mkdirSync(runDir, { recursive: true })
+    const run: WorkflowRun = {
+      id, name: id, prompt: 'p', projectName: 'demo', workspacePath, status: 'completed',
+      nodes: [], edges: [], requireConfirm: false, createdAt: Date.now(),
+    }
+    await app.inject({ method: 'POST', url: '/api/runs', headers: { Authorization: 'Bearer test' }, payload: run })
+    return runDir
+  }
+
+  it('treats names that merely start with ".." as inside the run workspace', async () => {
+    const { app } = await buildTestApp()
+    const headers = { Authorization: 'Bearer test' }
+    const runDir = await createRun(app, 'run-dots', 'runs/run-dots/repo')
+    mkdirSync(join(runDir, '..d'), { recursive: true })
+    writeFileSync(join(runDir, '..foo'), 'dots')
+    writeFileSync(join(runDir, '..d', 'x.txt'), 'inner')
+    // 位于工作区外的文件，用 ../ 访问必须仍被拒绝
+    writeFileSync(join(runDir, '..', 'secret.txt'), 'secret')
+
+    const content = await app.inject({ method: 'GET', url: '/api/fs/runs/run-dots/files/content?path=..foo', headers })
+    expect(content.statusCode).toBe(200)
+    expect(JSON.parse(content.body).content).toBe('dots')
+
+    const raw = await app.inject({ method: 'GET', url: '/api/fs/runs/run-dots/raw?path=..foo', headers })
+    expect(raw.statusCode).toBe(200)
+
+    const dir = await app.inject({ method: 'GET', url: '/api/fs/runs/run-dots/files?path=..d', headers })
+    expect(dir.statusCode).toBe(200)
+
+    for (const url of [
+      '/api/fs/runs/run-dots/files/content?path=../secret.txt',
+      '/api/fs/runs/run-dots/raw?path=../secret.txt',
+      '/api/fs/runs/run-dots/files?path=..',
+    ]) {
+      expect((await app.inject({ method: 'GET', url, headers })).statusCode, url).toBe(404)
+    }
+    await app.close()
+  })
+
+  it('accepts a run workspacePath whose first segment starts with ".." and rejects real escapes', async () => {
+    const { app } = await buildTestApp()
+    const headers = { Authorization: 'Bearer test' }
+    const dotted = await createRun(app, 'run-dotws', '..ws/repo')
+    writeFileSync(join(dotted, 'a.txt'), 'a')
+    const ok = await app.inject({ method: 'GET', url: '/api/fs/runs/run-dotws/files', headers })
+    expect(ok.statusCode).toBe(200)
+
+    // 逃逸到 workspaceRoot 之外
+    const outside = join(TEST_ROOT, 'outside')
+    mkdirSync(outside, { recursive: true })
+    await createRun(app, 'run-escape', '../outside')
+    const bad = await app.inject({ method: 'GET', url: '/api/fs/runs/run-escape/files', headers })
+    expect(bad.statusCode).toBe(404)
+    await app.close()
+  })
+
+  it('browse keeps rejecting paths that escape the allowed roots', async () => {
+    const { app } = await buildTestApp()
+    const headers = { Authorization: 'Bearer test' }
+    const ok = await app.inject({ method: 'GET', url: `/api/fs/browse?path=${encodeURIComponent(TEST_ROOT)}`, headers })
+    expect(ok.statusCode).toBe(200)
+    const escape = await app.inject({ method: 'GET', url: `/api/fs/browse?path=${encodeURIComponent(join(TEST_ROOT, '../etc'))}`, headers })
+    expect(escape.statusCode).toBe(403)
+    await app.close()
+  })
 })

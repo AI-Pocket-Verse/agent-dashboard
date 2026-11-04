@@ -1,6 +1,13 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, afterAll } from 'vitest'
+import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { DAGEngine, MAX_AUTO_FIX_ROUNDS, detectReviewIssues, extractAffectedPaths, getStartableNodes, getNodeDependencies, getNodeOutputTranscript, interpolatePrompt, isAllPrereqsDone, suggestFixAgentByRule } from '../../src/workflows/engine.js'
 import type { NodeRun, Edge } from '@agent-dashboard/shared'
+
+// 引擎会在工作区根下建 run 目录；用临时目录，避免在仓库里留下 server/runs 空目录
+const WS_ROOT = mkdtempSync(join(tmpdir(), 'engine-test-ws-'))
+afterAll(() => { rmSync(WS_ROOT, { recursive: true, force: true }) })
 
 afterEach(() => {
   vi.useRealTimers()
@@ -65,6 +72,15 @@ describe('getNodeOutputTranscript', () => {
       '[系统] legacy dashboard message',
     ])).toBe('architecture summary')
   })
+
+  it('excludes new-format [system:<code>] lines as well as legacy [系统] lines', () => {
+    expect(getNodeOutputTranscript([
+      'architecture summary',
+      '[system:run_timeout] Stopped after exceeding the 30 min limit. Adjust MAX_RUN_MINUTES to change it.',
+      '[系统] 服务重启，执行已中断',
+      '[system:user_note] User confirmation note: keep this out',
+    ])).toBe('architecture summary')
+  })
 })
 
 describe('DAGEngine confirmation instructions', () => {
@@ -75,7 +91,7 @@ describe('DAGEngine confirmation instructions', () => {
       kill: () => {},
     }
     const store = { saveRun: async () => undefined }
-    const engine = new DAGEngine(processManager as never, store as never, () => undefined)
+    const engine = new DAGEngine(processManager as never, store as never, () => undefined, WS_ROOT)
 
     await expect(engine.startWorkflow({
       name: 'empty workflow',
@@ -96,7 +112,7 @@ describe('DAGEngine confirmation instructions', () => {
       kill: () => {},
     }
     const store = { saveRun: async () => undefined }
-    const engine = new DAGEngine(processManager as never, store as never, () => undefined)
+    const engine = new DAGEngine(processManager as never, store as never, () => undefined, WS_ROOT)
 
     await expect(engine.startWorkflow({
       name: 'duplicate agents',
@@ -117,7 +133,7 @@ describe('DAGEngine confirmation instructions', () => {
     const spawned: string[] = []
     const processManager = { materializeAttachments: () => [], spawn: (_r: string, nodeId: string) => { spawned.push(nodeId) }, kill: () => {} }
     const store = { saveRun: async () => undefined }
-    const engine = new DAGEngine(processManager as never, store as never, () => undefined)
+    const engine = new DAGEngine(processManager as never, store as never, () => undefined, WS_ROOT)
     const nodes = [
       { id: 'A', agentName: 'planner', agentType: 'omc' as const, promptTemplate: 'a' },
       { id: 'B', agentName: 'architect', agentType: 'omc' as const, promptTemplate: 'b' },
@@ -141,7 +157,7 @@ describe('DAGEngine confirmation instructions', () => {
     }
     const processManager = { materializeAttachments: () => [], spawn: () => {}, kill: () => {} }
     const store = { loadRun: async () => completedRun, saveRun: async () => undefined }
-    const engine = new DAGEngine(processManager as never, store as never, () => undefined)
+    const engine = new DAGEngine(processManager as never, store as never, () => undefined, WS_ROOT)
 
     await expect(engine.continueWorkflow('done-run', {
       name: 'next', globalPrompt: 'g', requireConfirm: false,
@@ -169,7 +185,7 @@ describe('DAGEngine confirmation instructions', () => {
       kill: () => {},
     }
     const store = { saveRun: async () => undefined }
-    const engine = new DAGEngine(processManager as never, store as never, () => undefined)
+    const engine = new DAGEngine(processManager as never, store as never, () => undefined, WS_ROOT)
 
     const firstRun = await engine.startWorkflow({
       name: 'first flow',
@@ -253,7 +269,7 @@ describe('DAGEngine confirmation instructions', () => {
         })
       },
     }
-    const engine = new DAGEngine(processManager as never, store as never, () => undefined)
+    const engine = new DAGEngine(processManager as never, store as never, () => undefined, WS_ROOT)
 
     const continuedRun = await engine.continueWorkflow('existing-run', {
       name: 'Existing project',
@@ -294,7 +310,7 @@ describe('DAGEngine confirmation instructions', () => {
       kill: () => {},
     }
     const store = { saveRun: async () => undefined }
-    const engine = new DAGEngine(processManager as never, store as never, () => undefined)
+    const engine = new DAGEngine(processManager as never, store as never, () => undefined, WS_ROOT)
 
     const firstRun = await engine.startWorkflow({
       name: 'shared flow',
@@ -350,7 +366,7 @@ describe('DAGEngine confirmation instructions', () => {
       kill: () => {},
     }
     const store = { saveRun: async () => undefined }
-    const engine = new DAGEngine(processManager as never, store as never, () => undefined)
+    const engine = new DAGEngine(processManager as never, store as never, () => undefined, WS_ROOT)
 
     await engine.startWorkflow({
       name: 'serial dag',
@@ -414,7 +430,7 @@ describe('DAGEngine confirmation instructions', () => {
         savedRuns.push(JSON.parse(JSON.stringify(run)))
       },
     }
-    const engine = new DAGEngine(processManager as never, store as never, () => undefined)
+    const engine = new DAGEngine(processManager as never, store as never, () => undefined, WS_ROOT)
 
     vi.useFakeTimers()
     await engine.startWorkflow({
@@ -449,7 +465,7 @@ describe('DAGEngine confirmation instructions', () => {
       kill: () => {},
     }
     const store = { saveRun: async (run: unknown) => { savedRuns.push(JSON.parse(JSON.stringify(run))) } }
-    const engine = new DAGEngine(processManager as never, store as never, () => undefined)
+    const engine = new DAGEngine(processManager as never, store as never, () => undefined, WS_ROOT)
 
     vi.useFakeTimers()
     await engine.startWorkflow({
@@ -493,7 +509,7 @@ describe('DAGEngine confirmation instructions', () => {
       kill: () => {},
     }
     const store = { saveRun: async () => undefined }
-    const engine = new DAGEngine(processManager as never, store as never, msg => broadcasts.push(msg as never))
+    const engine = new DAGEngine(processManager as never, store as never, msg => broadcasts.push(msg as never), WS_ROOT)
 
     await engine.startWorkflow({
       name: 'confirm flow',
@@ -550,7 +566,7 @@ describe('DAGEngine confirmation instructions', () => {
       kill: () => {},
     }
     const store = { saveRun: async () => undefined }
-    const engine = new DAGEngine(processManager as never, store as never, msg => broadcasts.push(msg as never))
+    const engine = new DAGEngine(processManager as never, store as never, msg => broadcasts.push(msg as never), WS_ROOT)
 
     await engine.startWorkflow({
       name: 'confirm flow',
@@ -607,7 +623,7 @@ describe('DAGEngine confirmation instructions', () => {
       kill: () => {},
     }
     const store = { saveRun: async () => undefined }
-    const engine = new DAGEngine(processManager as never, store as never, msg => broadcasts.push(msg))
+    const engine = new DAGEngine(processManager as never, store as never, msg => broadcasts.push(msg), WS_ROOT)
 
     const run = await engine.startWorkflow({
       name: 'confirm flow',
@@ -629,6 +645,15 @@ describe('DAGEngine confirmation instructions', () => {
     expect(spawnedPrompts[1]).toContain('code from A output')
     expect(spawnedPrompts[1]).toContain('# 用户确认补充')
     expect(spawnedPrompts[1]).toContain('后续步骤请优先修改 RunnerPage')
+    // 补充内容只经 instructionBlock 进入下游提示词一次；系统日志行不进入提示词
+    expect(spawnedPrompts[1].split('后续步骤请优先修改 RunnerPage')).toHaveLength(2)
+    expect(spawnedPrompts[1]).not.toContain('[system:')
+    const nodeA = engine.getActiveRuns().find(r => r.id === run.id)?.nodes.find(n => n.id === 'A')
+    expect(nodeA?.logs).toContain('[system:user_note] User confirmation note: 后续步骤请优先修改 RunnerPage')
+    expect(broadcasts).toContainEqual({
+      type: 'agent:log',
+      payload: expect.objectContaining({ nodeId: 'A', line: '[system:user_note] User confirmation note: 后续步骤请优先修改 RunnerPage' }),
+    })
   })
 })
 
@@ -661,7 +686,7 @@ describe('DAGEngine cancellation', () => {
     }
     const savedRuns: unknown[] = []
     const store = { saveRun: async (run: unknown) => { savedRuns.push(run) } }
-    const engine = new DAGEngine(processManager as never, store as never, msg => broadcasts.push(msg as never))
+    const engine = new DAGEngine(processManager as never, store as never, msg => broadcasts.push(msg as never), WS_ROOT)
 
     const run = await engine.startWorkflow({
       name: 'cancel flow',
@@ -680,6 +705,11 @@ describe('DAGEngine cancellation', () => {
     completeFirstNode?.(0)
     engine.cancelRun(run.id)
 
+    expect((savedRuns.at(-1) as { nodes: Array<{ id: string; logs: string[] }> }).nodes.find(node => node.id === 'A')?.logs.at(-1)).toBe('[system:run_terminated] Workflow terminated.')
+    expect(broadcasts).toContainEqual({
+      type: 'agent:log',
+      payload: expect.objectContaining({ nodeId: 'A', line: '[system:run_terminated] Workflow terminated.' }),
+    })
     expect(broadcasts).toContainEqual({
       type: 'workflow:node_status',
       payload: expect.objectContaining({ runId: run.id, nodeId: 'A', status: 'failed' }),
@@ -740,7 +770,7 @@ describe('DAGEngine auto-fix loop', () => {
       kill: () => {},
     }
     const store = { saveRun: async () => undefined, loadRun: async () => null }
-    const engine = new DAGEngine(processManager as never, store as never, msg => { broadcasts.push(msg as never) })
+    const engine = new DAGEngine(processManager as never, store as never, msg => { broadcasts.push(msg as never) }, WS_ROOT)
     return { engine, broadcasts, completeByNode, logByNode }
   }
 
@@ -893,7 +923,7 @@ describe('DAGEngine prompt interpolation', () => {
       saveRun: async (run: { id: string }) => { saved.set(run.id, run) },
       loadRun: async (id: string) => saved.get(id) ?? null,
     }
-    return new DAGEngine(processManager as never, store as never, () => undefined)
+    return new DAGEngine(processManager as never, store as never, () => undefined, WS_ROOT)
   }
 
   it('replaces {{globalPrompt}} with the user request when a template runs', async () => {
@@ -963,7 +993,7 @@ describe('DAGEngine parallel runs with step confirmation', () => {
       kill: () => {},
     }
     const store = { saveRun: async () => undefined }
-    const engine = new DAGEngine(processManager as never, store as never, msg => broadcasts.push(msg as never))
+    const engine = new DAGEngine(processManager as never, store as never, msg => broadcasts.push(msg as never), WS_ROOT)
 
     const run = await engine.startWorkflow({
       name: 'parallel confirm',

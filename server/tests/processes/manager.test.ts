@@ -76,7 +76,7 @@ describe('ProcessManager', () => {
     await new Promise(r => setTimeout(r, 50))
 
     const combinedLog = onLog.mock.calls.map(([, line]) => line).join('\n')
-    expect(combinedLog).not.toContain('[系统]')
+    expect(combinedLog).not.toContain('[system:')
     expect(combinedLog).not.toContain('等待模型输出')
   })
 
@@ -88,7 +88,7 @@ describe('ProcessManager', () => {
     await new Promise(r => setTimeout(r, 80))
 
     const combinedLog = onLog.mock.calls.map(([, line]) => line).join('\n')
-    expect(combinedLog).not.toContain('[系统]')
+    expect(combinedLog).not.toContain('[system:')
     expect(combinedLog).not.toContain(['已运行', '超过'].join(''))
   })
 
@@ -101,7 +101,8 @@ describe('ProcessManager', () => {
     await new Promise(r => setTimeout(r, 180))
 
     const combinedLog = onLog.mock.calls.map(([, line]) => line).join('\n')
-    expect(combinedLog).toContain('[系统] 运行时间超过上限（0.05 秒），已终止')
+    // 系统日志改为稳定的英文 [system:<code>] 行，由前端按语言渲染
+    expect(combinedLog).toContain('[system:run_timeout] Stopped after exceeding the 0.05 s limit. Adjust MAX_RUN_MINUTES to change it.')
     expect(onComplete).toHaveBeenCalledWith('node-1', expect.any(Number))
     expect(manager.getRunningCount()).toBe(0)
   })
@@ -215,7 +216,7 @@ describe('ProcessManager', () => {
 
     expect(onComplete).toHaveBeenCalledTimes(1)
     expect(onComplete.mock.calls[0][1]).not.toBe(0)
-    expect(onLog.mock.calls.map(([, line]) => line).join('\n')).toContain('无法启动 claude（ENOENT）')
+    expect(onLog.mock.calls.map(([, line]) => line).join('\n')).toContain('[system:spawn_failed] Cannot start claude (ENOENT): /nonexistent/agent-dashboard-claude. Check CLAUDE_BIN or PATH.')
     expect(manager.getRunningCount()).toBe(0)
   })
 })

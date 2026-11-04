@@ -1,6 +1,7 @@
-import { render, waitFor } from '@testing-library/react'
+import { act, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import LogStream from '../../src/components/LogStream/index'
+import { useLocaleStore } from '../../src/lib/i18n'
 
 const apiMocks = vi.hoisted(() => ({
   getRunNodeLogs: vi.fn(),
@@ -20,6 +21,19 @@ describe('LogStream', () => {
   afterEach(() => {
     vi.useRealTimers()
     apiMocks.getRunNodeLogs.mockReset()
+  })
+
+  it('re-renders system log lines in the new language when the UI language changes', async () => {
+    act(() => useLocaleStore.getState().setSetting('zh'))
+    const line = '[system:run_timeout] Stopped after exceeding the 30 min limit. Adjust MAX_RUN_MINUTES to change it.'
+    const { container } = render(<LogStream agentName="planner" status="failed" logs={[line]} />)
+    await waitFor(() => expect(container.textContent).toContain('运行时间超过上限'))
+
+    act(() => useLocaleStore.getState().setSetting('en'))
+
+    await waitFor(() => expect(container.textContent).toContain('Stopped after exceeding the 30 min limit'))
+    expect(container.textContent).not.toContain('运行时间超过上限')
+    act(() => useLocaleStore.getState().setSetting('zh'))
   })
 
   it('compacts duplicate consecutive log lines and keeps the content scrollable', () => {
