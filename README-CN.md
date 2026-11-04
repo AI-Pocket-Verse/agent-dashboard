@@ -9,9 +9,9 @@
 
 把多个 Claude Code agent 编排成 DAG 工作流的 Web 看板。描述任务，自己挑选 agent（或交给 AI 挑选），每个节点都会真实拉起一个 `claude` CLI 进程，节点状态和输出通过 WebSocket 推送到浏览器。运行结束后可以浏览 agent 写出的文件、预览生成的 HTML，并在同一个任务里继续下一轮。
 
-![演示](docs/images/demo.gif)
+![演示](docs/images/demo-zh.gif)
 
-▶ [观看完整演示视频（MP4，英文界面）](docs/media/demo.mp4) -- 真实运行全程录制，等待 agent 的部分做了加速。
+▶ [观看完整演示视频（MP4）](docs/media/demo-zh.mp4) -- 真实运行全程录制，等待 agent 的部分做了加速。
 
 ## 目录
 
