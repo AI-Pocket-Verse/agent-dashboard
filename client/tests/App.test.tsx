@@ -15,10 +15,16 @@ const storeActions = {
   failRun: vi.fn(),
   setPendingConfirm: vi.fn(),
   setSend: vi.fn(),
+  setLastError: vi.fn(),
 }
 
+const wsMock = vi.hoisted(() => ({ handler: null as null | ((msg: unknown) => void) }))
+
 vi.mock('../src/hooks/useWebSocket', () => ({
-  useWebSocket: () => ({ send: vi.fn() }),
+  useWebSocket: (_url: string, _token: string, onMessage: (msg: unknown) => void) => {
+    wsMock.handler = onMessage
+    return { send: vi.fn() }
+  },
 }))
 
 vi.mock('../src/store/agentStore', () => ({
@@ -41,7 +47,8 @@ vi.mock('../src/store/workflowStore', () => ({
 }))
 
 vi.mock('../src/store/wsStore', () => ({
-  useWsStore: (selector: (state: { setSend: typeof storeActions.setSend }) => unknown) => selector({ setSend: storeActions.setSend }),
+  useWsStore: (selector: (state: { setSend: typeof storeActions.setSend; setLastError: typeof storeActions.setLastError }) => unknown) =>
+    selector({ setSend: storeActions.setSend, setLastError: storeActions.setLastError }),
 }))
 
 vi.mock('../src/pages/Dashboard', () => ({ default: () => <p>Dashboard page</p> }))
@@ -136,5 +143,17 @@ describe('App context menu', () => {
     })
     expect(event.defaultPrevented).toBe(true)
     expect(screen.queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument()
+  })
+})
+
+describe('App server errors', () => {
+  test('shows the reason when the server rejects a WebSocket request', async () => {
+    render(<App />, { wrapper: AppRouter })
+
+    act(() => {
+      wsMock.handler?.({ type: 'error', payload: { message: 'Agent $& used twice', requestType: 'workflow:run' } })
+    })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Agent $& used twice')
   })
 })

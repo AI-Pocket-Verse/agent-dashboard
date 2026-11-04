@@ -19,20 +19,38 @@ vi.mock('../../src/lib/api', () => ({
 
 vi.mock('../../src/components/TaskForm/index', () => ({
   default: ({ onSubmit, agents }: { onSubmit: (params: unknown) => Promise<void>; agents: Array<{ name: string; type: string }> }) => (
-    <button
-      type="button"
-      onClick={() => onSubmit({
-        mode: 'manual',
-        prompt: 'new task',
-        projectName: '',
-        codeContext: [],
-        attachments: [],
-        requireConfirm: true,
-        selectedAgents: [agents[0]],
-      })}
-    >
-      submit task
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => onSubmit({
+          mode: 'manual',
+          prompt: 'new task',
+          projectName: '',
+          codeContext: [],
+          attachments: [],
+          requireConfirm: true,
+          executionMode: 'serial',
+          selectedAgents: [agents[0]],
+        })}
+      >
+        submit task
+      </button>
+      <button
+        type="button"
+        onClick={() => onSubmit({
+          mode: 'manual',
+          prompt: 'parallel task',
+          projectName: '',
+          codeContext: [],
+          attachments: [],
+          requireConfirm: false,
+          executionMode: 'dag',
+          selectedAgents: agents.slice(0, 2),
+        })}
+      >
+        submit parallel workflow
+      </button>
+    </>
   ),
 }))
 
@@ -83,5 +101,22 @@ describe('Dashboard task creation', () => {
       })
     })
     expect(screen.queryByText('已有任务在运行，不能重复提交新任务')).not.toBeInTheDocument()
+  })
+
+  it('passes the run options from the task form into the workflow run', async () => {
+    useAgentStore.getState().setAgents([
+      { name: 'planner', type: 'omc', description: '需求规划', status: 'idle' },
+      { name: 'designer', type: 'omc', description: '界面设计', status: 'idle' },
+    ])
+
+    render(<Dashboard />, { wrapper: MemoryRouter })
+    fireEvent.click(screen.getByRole('button', { name: 'submit parallel workflow' }))
+
+    await waitFor(() => {
+      expect(send).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'workflow:run',
+        payload: expect.objectContaining({ requireConfirm: false, executionMode: 'dag' }),
+      }))
+    })
   })
 })

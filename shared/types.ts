@@ -148,6 +148,8 @@ export type WsServerMessage =
   | { type: 'task:auto_fix_required'; payload: AutoFixOffer }
   | { type: 'file:activity'; payload: { runId: string; path: string; active: boolean } }
   | { type: 'state:snapshot'; payload: { agents: AgentInfo[]; activeRuns: WorkflowRun[] } }
+  // 只发给出错请求的发送方；requestType 是触发错误的客户端消息类型
+  | { type: 'error'; payload: { message: string; requestType?: WsClientMessage['type'] } }
 
 // ─── API Payloads ─────────────────────────────────────────────────────────────
 

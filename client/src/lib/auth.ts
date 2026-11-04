@@ -19,11 +19,15 @@ export function clearToken(): void {
   localStorage.removeItem(STORAGE_KEY)
 }
 
-export async function verifyToken(token: string): Promise<boolean> {
+// ok：可以进入；forbidden：服务端处于免密模式但拒绝了非本机访问（403），输入密码也没用；denied：需要密码或密码错误
+export type TokenCheck = 'ok' | 'forbidden' | 'denied'
+
+export async function verifyToken(token: string): Promise<TokenCheck> {
   try {
     const res = await fetch('/api/health', { headers: { Authorization: `Bearer ${token}` } })
-    return res.ok
+    if (res.ok) return 'ok'
+    return res.status === 403 ? 'forbidden' : 'denied'
   } catch {
-    return false
+    return 'denied'
   }
 }

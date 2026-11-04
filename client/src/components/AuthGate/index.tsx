@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { getToken, setToken, verifyToken } from '../../lib/auth'
 import { t } from '../../lib/i18n'
 
-type GateState = 'checking' | 'login' | 'ready'
+type GateState = 'checking' | 'login' | 'forbidden' | 'ready'
 
 export default function AuthGate({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GateState>('checking')
@@ -11,16 +11,16 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    verifyToken(getToken()).then(ok => setState(ok ? 'ready' : 'login'))
+    verifyToken(getToken()).then(result => setState(result === 'ok' ? 'ready' : result === 'forbidden' ? 'forbidden' : 'login'))
   }, [])
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     if (!input.trim() || submitting) return
     setSubmitting(true)
-    const ok = await verifyToken(input.trim())
+    const result = await verifyToken(input.trim())
     setSubmitting(false)
-    if (ok) {
+    if (result === 'ok') {
       setToken(input.trim())
       setState('ready')
     } else {
@@ -30,6 +30,18 @@ export default function AuthGate({ children }: { children: ReactNode }) {
 
   if (state === 'ready') return <>{children}</>
   if (state === 'checking') return null
+  if (state === 'forbidden') {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[rgb(247,248,253)] px-4">
+        <div role="alert" className="flex w-[360px] flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-8 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+          <h1 className="text-lg font-semibold text-[rgb(25,29,38)]">Agent Dashboard</h1>
+          <p className="text-sm leading-6 text-slate-600">
+            {t('此看板未设置访问密码，免密模式只允许在运行服务的电脑上访问。请在服务端设置 DASHBOARD_SECRET 后重启。')}
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen items-center justify-center bg-[rgb(247,248,253)]">

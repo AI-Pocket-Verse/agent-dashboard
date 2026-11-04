@@ -210,6 +210,8 @@ function LanguageIcon() {
 export default function App() {
   const [copyMenu, setCopyMenu] = useState<CopyMenuState | null>(null)
   const [copyToastVisible, setCopyToastVisible] = useState(false)
+  // 服务端拒绝某条 WS 请求时的原因（如同名 agent、任务仍在运行）
+  const [serverError, setServerError] = useState<string | null>(null)
   const [langMenu, setLangMenu] = useState<{ left: number; top: number } | null>(null)
   // Subscribing here re-renders the whole tree on language change, so plain t() stays fresh everywhere.
   const localeSetting = useLocaleStore(s => s.setting)
@@ -218,6 +220,7 @@ export default function App() {
   const { setAgents, setAgentStatus } = useAgentStore()
   const { upsertRun, appendLog, setNodeStatus, setRunStatus, completeRun, failRun, setPendingConfirm, setPendingAutoFix, setFileActivity, clearActiveFiles } = useWorkflowStore()
   const setSend = useWsStore(s => s.setSend)
+  const setLastError = useWsStore(s => s.setLastError)
 
   const handleMessage = useCallback((msg: WsServerMessage) => {
     switch (msg.type) {
@@ -258,8 +261,12 @@ export default function App() {
       case 'file:activity':
         setFileActivity(msg.payload.runId, msg.payload.path, msg.payload.active)
         break
+      case 'error':
+        setServerError(msg.payload.message)
+        setLastError({ message: msg.payload.message, requestType: msg.payload.requestType, at: Date.now() })
+        break
     }
-  }, [setAgents, setAgentStatus, upsertRun, appendLog, setNodeStatus, setRunStatus, completeRun, failRun, setPendingConfirm, setPendingAutoFix, setFileActivity, clearActiveFiles])
+  }, [setAgents, setAgentStatus, upsertRun, appendLog, setNodeStatus, setRunStatus, completeRun, failRun, setPendingConfirm, setPendingAutoFix, setFileActivity, clearActiveFiles, setLastError])
 
   const { send } = useWebSocket(WS_URL, getToken(), handleMessage)
 
@@ -336,6 +343,13 @@ export default function App() {
       document.removeEventListener('scroll', closeCopyMenu, true)
     }
   }, [copyMenu])
+
+  useEffect(() => {
+    if (!serverError) return
+
+    const hideTimer = window.setTimeout(() => setServerError(null), 6000)
+    return () => window.clearTimeout(hideTimer)
+  }, [serverError])
 
   useEffect(() => {
     if (!copyToastVisible) return
@@ -433,6 +447,14 @@ export default function App() {
           },
         ]}
       />
+      {serverError ? (
+        <div
+          role="alert"
+          className="fixed bottom-6 left-1/2 z-[60] max-w-[90vw] -translate-x-1/2 rounded-2xl border border-rose-200 bg-white/95 px-4 py-2 text-sm font-medium text-rose-700 shadow-[0_18px_40px_rgba(15,23,42,0.16)] backdrop-blur"
+        >
+          {t('操作失败：{message}', { message: serverError })}
+        </div>
+      ) : null}
       {copyToastVisible ? (
         <div
           role="status"

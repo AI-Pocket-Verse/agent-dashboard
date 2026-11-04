@@ -36,6 +36,8 @@ export function createMessageHandler(
         engine.declineAutoFix(msg.payload.runId)
         break
       }
+      default:
+        throw new Error(`Unknown message type: ${(msg as { type: string }).type}`)
     }
   }
 }

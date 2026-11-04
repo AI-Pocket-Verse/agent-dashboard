@@ -45,7 +45,8 @@ export function t(zh: string, params?: Record<string, string | number>): string 
   let text = locale === 'en' ? (EN[zh] ?? zh) : zh
   if (params) {
     for (const [key, value] of Object.entries(params)) {
-      text = text.replace(`{${key}}`, String(value))
+      // 函数形式：参数值里的 $& 等不被当作替换模式（参数可能是用户或服务端文本）
+      text = text.replace(`{${key}}`, () => String(value))
     }
   }
   return text
@@ -58,6 +59,13 @@ const EN: Record<string, string> = {
   '模板': 'Templates',
   '历史': 'History',
   '复制成功': 'Copied',
+  '重试': 'Retry',
+  '此看板未设置访问密码，免密模式只允许在运行服务的电脑上访问。请在服务端设置 DASHBOARD_SECRET 后重启。': 'This dashboard has no password set, so it only accepts requests from the machine it runs on. Set DASHBOARD_SECRET on the server and restart it.',
+  '逐步确认': 'Confirm steps',
+  '并行执行': 'Parallel',
+  '每个节点结束后暂停，等你确认再继续': 'Pause after each node until you confirm',
+  '没有依赖关系的节点同时运行': 'Run nodes without dependencies at the same time',
+  '操作失败：{message}': 'Request failed: {message}',
   '语言': 'Language',
   '跟随系统': 'System',
   '简体中文': '简体中文',

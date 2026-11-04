@@ -4,7 +4,7 @@
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Publish Docker images](https://github.com/AI-Pocket-Verse/agent-dashboard/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/AI-Pocket-Verse/agent-dashboard/actions/workflows/docker-publish.yml)
-![Node.js 22](https://img.shields.io/badge/node-22%20LTS-339933?logo=node.js&logoColor=white)
+![Node.js >=22](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)
 ![Claude Code](https://img.shields.io/badge/runs-Claude%20Code%20CLI-d97757)
 
 把多个 Claude Code agent 编排成 DAG 工作流的 Web 看板。描述任务，自己挑选 agent（或交给 AI 挑选），每个节点都会真实拉起一个 `claude` CLI 进程，节点状态和输出通过 WebSocket 推送到浏览器。运行结束后可以浏览 agent 写出的文件、预览生成的 HTML，并在同一个任务里继续下一轮。
@@ -30,10 +30,10 @@
 
 ## 功能
 
-- **DAG 工作流** -- 在画布上把自定义 agent 与 OMC 角色 agent 组合成流水线（基于 [@xyflow](https://reactflow.dev)）；节点输出通过 `{{nodes.<id>.output}}` 传入下游提示词。节点按依赖顺序执行。
+- **DAG 工作流** -- 在画布上把自定义 agent 与 OMC 角色 agent 组合成流水线（基于 [@xyflow](https://reactflow.dev)）；节点输出通过 `{{nodes.<id>.output}}` 传入下游提示词。节点按依赖顺序执行，可以逐个运行，也可以让互不依赖的分支并行。
 - **真实进程执行** -- 每个节点在独立的 run 工作区里运行 `claude` CLI；节点状态和每一行输出都通过 WebSocket 推送。
 - **AI 智能选型** -- 描述任务，由 `claude` 自动挑选并连接合适的 agent。
-- **人工确认** -- 每个节点结束后运行会暂停，你可以查看结果、给下游节点补充要求，或终止运行。
+- **人工确认** -- 开启「逐步确认」时，每个节点结束后运行会暂停，你可以查看结果、给下游节点补充要求，或终止运行。
 - **自动修复循环** -- `code-reviewer` 节点发现阻塞性问题时，看板提供最多 3 轮自动修复，并路由给合适的 agent。
 - **多轮任务** -- 运行结束后可以基于同一任务继续提需求，每一轮保留各自的 DAG 和日志。
 - **工作区浏览与 HTML 预览** -- 查看每次运行产出的文件，在沙箱 iframe 里预览生成的 HTML 原型。
@@ -55,7 +55,7 @@ flowchart LR
 ```
 
 1. 前端发送 `workflow:run` 消息，带上节点、连线和你的需求。
-2. DAG 引擎依次启动上游已完成的节点。每个节点是一个 `claude -p` 进程，工作目录是本次运行的工作区 `$WORKSPACE_ROOT/runs/<runId>/repo`。
+2. DAG 引擎启动上游已完成的节点：默认逐个运行，开启「并行执行」后同时启动所有可运行的节点。每个节点是一个 `claude -p` 进程，工作目录是本次运行的工作区 `$WORKSPACE_ROOT/runs/<runId>/repo`。
 3. 进程的每一行 stdout/stderr 都通过 WebSocket 广播并写入 SQLite。`claude -p` 在节点结束时才输出结果，所以运行中的节点会一直显示「Running…」。
 4. 节点结束后，它的输出可以通过 `{{nodes.<id>.output}}` 注入下游节点的提示词。
 
@@ -65,8 +65,8 @@ flowchart LR
 
 ### 环境要求
 
-- **Node.js 22 LTS**（Node 24 也能用，但需要从源码编译 `better-sqlite3`，见[常见问题](#常见问题)）
-- **pnpm 10**（pnpm 11 及以上需要多一步，见[常见问题](#常见问题)）
+- **Node.js 22 或更高版本**
+- **pnpm 10** -- 仓库通过 `packageManager` 锁定版本，执行一次 `corepack enable` 后会自动使用正确版本
 - 已安装并登录的 [Claude Code](https://claude.com/claude-code) CLI（`claude` 在 `PATH` 中）
 
 ### 本机运行
@@ -110,6 +110,8 @@ PROJECT_ROOT=/path/to/your/projects pnpm dev   # 同时启动 server（tsx watch
 | **模板** | 直接运行已保存的工作流模板 |
 | 粘贴 / 选择文件 | 添加图片或文件附件；输入 `@` 可以在需求里引用附件 |
 | （什么都不选） | **AI 自动选择**：由 `claude` 挑选 agent 并连好 DAG |
+| **逐步确认** | 默认开启：每个节点结束后暂停，等你确认再继续。关闭后一路跑完 |
+| **并行执行** | 默认关闭。开启后，互不依赖的节点同时运行 |
 
 ![选择 agent](docs/images/agents.png)
 
@@ -119,7 +121,7 @@ PROJECT_ROOT=/path/to/your/projects pnpm dev   # 同时启动 server（tsx watch
 
 ![运行中](docs/images/runner.png)
 
-每个节点结束后，运行会暂停并请你确认。你可以给后续 agent 补充要求、点确认继续，或终止运行。如果 `code-reviewer` 节点发现阻塞性问题，会改为弹出自动修复提示。
+开启「逐步确认」时，每个节点结束后运行会暂停并请你确认。你可以给后续 agent 补充要求、点确认继续，或终止运行。如果 `code-reviewer` 节点发现阻塞性问题，会改为弹出自动修复提示。
 
 「流程」页展示当前轮次的 DAG 和各节点的实时状态：
 
@@ -137,7 +139,10 @@ PROJECT_ROOT=/path/to/your/projects pnpm dev   # 同时启动 server（tsx watch
 
 ### 4. 编排工作流模板
 
-「模板」是可复用工作流的画布。从内置模板或空白模板开始，添加 agent 节点、连线，并编辑每个节点的提示词。用 `{{nodes.<id>.output}}` 把上游节点的输出传进提示词。
+「模板」是可复用工作流的画布。从内置模板或空白模板开始，添加 agent 节点、连线，并编辑每个节点的提示词。提示词里可以用两个占位符：
+
+- `{{globalPrompt}}` -- 启动运行时输入的需求（新一轮里是追加的需求）
+- `{{nodes.<id>.output}}` -- 上游节点的输出
 
 ![模板画布](docs/images/canvas.png)
 
@@ -158,7 +163,7 @@ agent 列表由两部分组成：
 
 ## Docker 部署
 
-部署到服务器时**必须**设置 `DASHBOARD_SECRET`，否则任何能访问该主机的人都能使用看板。
+部署到服务器时**必须**设置 `DASHBOARD_SECRET`。不设置时服务端处于免密模式，只接受容器内部的请求，经 nginx 访问的 Web UI 会得到 `403`。
 
 ```bash
 DASHBOARD_SECRET=$(openssl rand -hex 16) \
@@ -192,7 +197,7 @@ docker compose up -d
 
 ## 安全说明
 
-- **免密模式（不设 `DASHBOARD_SECRET`）只适合单人使用的本机。** 服务端监听所有网卡，且不校验 WebSocket 来源，所以任何能访问 3001/3002 端口的设备、或者你浏览器里打开的任意网页，都能发起 agent 运行。只要存在这类风险，就请设置 `DASHBOARD_SECRET`。
+- **免密模式（不设 `DASHBOARD_SECRET`）只服务本机。** 请求必须来自回环地址，`Host` 必须是 `localhost` / `127.0.0.1`，浏览器请求还必须来自本机页面；否则返回 `403`（WebSocket 以 `4403` 关闭）。这样可以挡住局域网里的其他设备和网页发起的跨站请求。想从其他设备或通过反向代理访问，请设置 `DASHBOARD_SECRET`。
 - 设置密码后，HTTP API 要求 `Authorization: Bearer <secret>`（时间安全比对），WebSocket 要求 `?secret=<secret>`。Web UI 只需输入一次，之后保存在 `localStorage`。
 - 文件浏览只允许 `PROJECT_ROOT`、`WORKSPACE_ROOT` 和个人主目录，并拒绝 `.ssh`、`.env` 等隐藏路径。
 
@@ -200,8 +205,8 @@ docker compose up -d
 
 | 现象 | 处理 |
 |---|---|
-| `pnpm install` / `pnpm dev` 报 `ERR_PNPM_IGNORED_BUILDS` | pnpm 11 起不再读取 `onlyBuiltDependencies`。用 pnpm 10 安装（`npx pnpm@10 install`），或执行一次 `pnpm approve-builds better-sqlite3 esbuild` 批准原生构建（会改写 `pnpm-workspace.yaml`）。 |
-| Node 24 下 `better-sqlite3` 编译失败 | `better-sqlite3` 11 没有 Node 24 的预编译包，需要从源码编译，依赖 Xcode Command Line Tools（macOS）或 `build-essential` + Python（Linux）。最省事的是用 Node 22 LTS。 |
+| `pnpm install` / `pnpm dev` 报 `ERR_PNPM_IGNORED_BUILDS` | 你用的是 pnpm 11 或更新版本，它会忽略本仓库的构建设置。执行 `corepack enable` 使用锁定的 pnpm 10，或用 `npx pnpm@10 install` 安装。 |
+| 返回 `403 Forbidden`，或 WebSocket 以 `4403` 关闭 | 免密模式只接受本机请求。想从其他设备或通过反向代理访问，请设置 `DASHBOARD_SECRET`。 |
 | AI 自动选择（或继续任务）报 `spawnSync claude ETIMEDOUT` | 规划步骤执行 `claude -p`，上限 60 秒。如果你的 `claude` 启动较慢（插件、hooks、MCP server 较多），请手动选择 agent 或使用模板。 |
 | 自定义 agent 节点报 `--agent '<name>' not found` | 缺少 agent 文件。请在 `PROJECT_ROOT` 或个人主目录下添加 `.claude/agents/<name>.md`。 |
 | 3001 / 3002 / 5173 端口报 `EADDRINUSE` | 执行 `./restart.sh`，它会先释放这些端口。 |

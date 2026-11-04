@@ -70,8 +70,11 @@ export function isAllPrereqsDone(nodeId: string, nodes: NodeRun[], edges: Edge[]
   return prereqs.every(pid => nodes.find(n => n.id === pid)?.status === 'completed')
 }
 
-export function interpolatePrompt(prompt: string, nodes: NodeRun[]): string {
-  return prompt.replace(/\{\{nodes\.([^.]+)\.output\}\}/g, (match, nodeId) => {
+// globalPrompt：本轮用户需求，供模板里的 {{globalPrompt}} 占位符使用。
+// 单次匹配两种占位符，避免替换进来的文本被再次解释。
+export function interpolatePrompt(prompt: string, nodes: NodeRun[], globalPrompt = ''): string {
+  return prompt.replace(/\{\{(?:globalPrompt|nodes\.([^.]+)\.output)\}\}/g, (match, nodeId?: string) => {
+    if (nodeId === undefined) return globalPrompt
     const node = nodes.find(n => n.id === nodeId)
     return node?.output ?? match
   })
@@ -363,7 +366,25 @@ export class DAGEngine {
       this.broadcast({ type: 'workflow:status', payload: { runId, roundId, status: 'running' } })
       this.persistSnapshot(run)
       this.advanceRun(runId)
+
+      // 并行模式下可能有多个节点同时等待确认，而前端一次只显示一张确认卡：
+      // 还有等待中的节点时保持 paused，并重新提示下一个
+      const nextWaiting = run.nodes.find(n => n.status === 'waiting')
+      if (nextWaiting && this.activeRuns.has(runId)) {
+        this.setRunRoundStatus(run, 'paused')
+        this.broadcast({ type: 'workflow:status', payload: { runId, roundId, status: 'paused' } })
+        this.broadcastConfirmRequired(run, roundId, nextWaiting)
+        this.persistSnapshot(run)
+      }
     }
+  }
+
+  private broadcastConfirmRequired(run: WorkflowRun, roundId: string, node: NodeRun): void {
+    const nextNodeIds = run.edges.filter(e => e.from === node.id).map(e => e.to)
+    this.broadcast({
+      type: 'task:confirm_required',
+      payload: { runId: run.id, roundId, nodeId: node.id, summary: node.output ?? '', nextNodeIds },
+    })
   }
 
   cancelRun(runId: string): void {
@@ -428,7 +449,7 @@ export class DAGEngine {
       const node = run.nodes.find(n => n.id === nodeId)!
       node.status = 'running'
       node.startedAt = Date.now()
-      const prompt = interpolatePrompt(node.prompt, run.nodes)
+      const prompt = interpolatePrompt(node.prompt, run.nodes, round.prompt ?? run.prompt ?? '')
 
       this.broadcast({ type: 'workflow:node_status', payload: { runId, roundId, nodeId, status: 'running', startedAt: node.startedAt } })
       this.broadcast({ type: 'workflow:status', payload: { runId, roundId, status: 'running' } })
@@ -490,11 +511,7 @@ export class DAGEngine {
       this.setRunRoundStatus(run, 'paused')
       this.broadcast({ type: 'workflow:node_status', payload: { runId, roundId, nodeId, status: 'waiting', finishedAt: node.finishedAt } })
       this.broadcast({ type: 'workflow:status', payload: { runId, roundId, status: 'paused' } })
-      const nextNodeIds = run.edges.filter(e => e.from === nodeId).map(e => e.to)
-      this.broadcast({
-        type: 'task:confirm_required',
-        payload: { runId, roundId, nodeId, summary: node.output, nextNodeIds }
-      })
+      this.broadcastConfirmRequired(run, roundId, node)
     } else {
       node.status = 'completed'
       this.broadcast({ type: 'workflow:node_status', payload: { runId, roundId, nodeId, status: 'completed', finishedAt: node.finishedAt } })

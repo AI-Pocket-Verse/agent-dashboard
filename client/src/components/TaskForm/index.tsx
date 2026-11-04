@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type CompositionEvent, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
-import type { AgentInfo, CodeContext, TaskAttachment, WorkflowTemplate } from '../../types/index'
+import type { AgentInfo, CodeContext, ExecutionMode, TaskAttachment, WorkflowTemplate } from '../../types/index'
 import type { TaskMode } from './ModeSelector'
 import type { FsItem } from '../../lib/api'
 import { getAgentDisplayDescription } from '../../lib/agentDescriptions'
@@ -13,6 +13,7 @@ interface SubmitParams {
   codeContext: CodeContext[]
   attachments: TaskAttachment[]
   requireConfirm: boolean
+  executionMode: ExecutionMode
   selectedAgents?: AgentInfo[]
   templateId?: string
 }
@@ -69,21 +70,31 @@ function ToolbarChip({
   icon,
   active = false,
   disabled = false,
+  pressed,
+  title,
   onClick,
 }: {
   label: string
   icon: ReactNode
   active?: boolean
   disabled?: boolean
+  // 开关型按钮传 pressed，读屏会报告开/关状态
+  pressed?: boolean
+  title?: string
   onClick: () => void
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-pressed={pressed}
+      title={title}
       className={`inline-flex h-10 items-center gap-2 rounded-full border px-3.5 text-[13px] font-medium transition-all ${
         disabled
           ? 'cursor-not-allowed border-slate-200 bg-transparent text-slate-300 shadow-none'
+          : pressed
+            ? 'border-slate-800 bg-slate-900/[0.05] text-slate-900 shadow-none'
           : active
             ? 'border-slate-300 bg-transparent text-slate-900 shadow-none'
             : 'border-slate-200 bg-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900'
@@ -232,6 +243,23 @@ function getNextMode(templateId: string, selectedAgents: string[]): TaskMode {
   if (templateId) return 'template'
   if (selectedAgents.length > 0) return 'manual'
   return 'ai'
+}
+
+function ConfirmIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4">
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4" />
+      <path d="m5.4 8.2 1.8 1.8 3.4-3.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function ParallelIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4">
+      <path d="M3 4.5h10M3 8h10M3 11.5h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  )
 }
 
 function TemplateIcon() {
@@ -600,6 +628,8 @@ export default function TaskForm({
   const [promptParts, setPromptParts] = useState<PromptPart[]>([])
   const [promptHasContent, setPromptHasContent] = useState(false)
   const [mode, setMode] = useState<TaskMode>('ai')
+  const [requireConfirm, setRequireConfirm] = useState(true)
+  const [parallel, setParallel] = useState(false)
   const [codeContext, setCodeContext] = useState<CodeContext[]>([])
   const [attachments, setAttachments] = useState<AttachmentItem[]>([])
   const [selectedAgents, setSelectedAgents] = useState<string[]>([])
@@ -1083,7 +1113,8 @@ export default function TaskForm({
         projectName: '',
         codeContext,
         attachments: attachmentPayload,
-        requireConfirm: true,
+        requireConfirm,
+        executionMode: parallel ? 'dag' : 'serial',
         selectedAgents: mode === 'manual' ? agents.filter(a => selectedAgents.includes(a.name)) : undefined,
         templateId: mode === 'template' ? templateId : undefined,
       })
@@ -1287,6 +1318,22 @@ export default function TaskForm({
               icon={<ContextIcon />}
               active={isContextModalOpen || !!pendingContext || codeContext.length > 0}
               onClick={toggleContextModal}
+            />
+            <ToolbarChip
+              label={t('逐步确认')}
+              icon={<ConfirmIcon />}
+              active={requireConfirm}
+              pressed={requireConfirm}
+              title={t('每个节点结束后暂停，等你确认再继续')}
+              onClick={() => setRequireConfirm(value => !value)}
+            />
+            <ToolbarChip
+              label={t('并行执行')}
+              icon={<ParallelIcon />}
+              active={parallel}
+              pressed={parallel}
+              title={t('没有依赖关系的节点同时运行')}
+              onClick={() => setParallel(value => !value)}
             />
           </div>
 

@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'crypto'
 import type { FastifyPluginAsync } from 'fastify'
 import fp from 'fastify-plugin'
+import { isLocalRequest } from './localGuard.js'
 
 interface AuthOptions { secret: string }
 
@@ -11,7 +12,15 @@ export function safeEqual(a: string, b: string): boolean {
 }
 
 const authPlugin: FastifyPluginAsync<AuthOptions> = async (fastify, opts) => {
-  if (!opts.secret) return // open local mode: no secret configured, skip auth
+  if (!opts.secret) {
+    // open local mode: no password, but only this machine may call the API
+    fastify.addHook('onRequest', async (request, reply) => {
+      if (!isLocalRequest(request.raw)) {
+        reply.code(403).send({ error: 'Forbidden: set DASHBOARD_SECRET to allow non-local access' })
+      }
+    })
+    return
+  }
 
   fastify.addHook('onRequest', async (request, reply) => {
     const auth = request.headers.authorization

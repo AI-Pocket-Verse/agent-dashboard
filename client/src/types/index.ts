@@ -21,4 +21,5 @@ export type {
   ContinueWorkflowPayload,
   AiSelectResponse,
   AutoFixOffer,
+  ExecutionMode,
 } from '@agent-dashboard/shared'

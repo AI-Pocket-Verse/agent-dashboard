@@ -799,3 +799,119 @@ describe('DAGEngine auto-fix loop', () => {
     expect(continued.activeRoundId).toBe('round-2')
   })
 })
+
+describe('DAGEngine prompt interpolation', () => {
+  function makeEngine(prompts: string[]) {
+    const processManager = {
+      materializeAttachments: () => [],
+      spawn: (_runId: string, _nodeId: string, _agentType: string, _agentName: string, prompt: string) => {
+        prompts.push(prompt)
+      },
+      kill: () => {},
+    }
+    const saved = new Map<string, unknown>()
+    const store = {
+      saveRun: async (run: { id: string }) => { saved.set(run.id, run) },
+      loadRun: async (id: string) => saved.get(id) ?? null,
+    }
+    return new DAGEngine(processManager as never, store as never, () => undefined)
+  }
+
+  it('replaces {{globalPrompt}} with the user request when a template runs', async () => {
+    const prompts: string[] = []
+    const engine = makeEngine(prompts)
+
+    await engine.startWorkflow({
+      name: 'template run',
+      globalPrompt: 'build a login page',
+      requireConfirm: false,
+      nodes: [{ id: 'n1', agentName: 'backend-dev', agentType: 'custom', promptTemplate: '{{globalPrompt}} — 实现后端 API' }],
+      edges: [],
+    })
+
+    expect(prompts).toEqual(['build a login page — 实现后端 API'])
+  })
+
+  it('uses the new round request for {{globalPrompt}} when a run continues', async () => {
+    const prompts: string[] = []
+    const engine = makeEngine(prompts)
+    const run = await engine.startWorkflow({
+      name: 'first',
+      globalPrompt: 'first request',
+      requireConfirm: false,
+      nodes: [{ id: 'n1', agentName: 'planner', agentType: 'omc', promptTemplate: '{{globalPrompt}}' }],
+      edges: [],
+    })
+    engine.cancelRun(run.id)
+
+    await engine.continueWorkflow(run.id, {
+      name: 'second',
+      globalPrompt: 'follow-up request',
+      requireConfirm: false,
+      nodes: [{ id: 'n2', agentName: 'designer', agentType: 'omc', promptTemplate: 'Design: {{globalPrompt}}' }],
+      edges: [],
+    })
+
+    expect(prompts).toEqual(['first request', 'Design: follow-up request'])
+  })
+})
+
+describe('interpolatePrompt with globalPrompt', () => {
+  it('does not re-interpret placeholders that appear inside substituted text', () => {
+    const nodes = [{ ...makeNode('A', 'completed'), output: 'see {{globalPrompt}}' }]
+    expect(interpolatePrompt('{{globalPrompt}} / {{nodes.A.output}}', nodes, 'use $& and {{nodes.A.output}}'))
+      .toBe('use $& and {{nodes.A.output}} / see {{globalPrompt}}')
+  })
+
+  it('replaces {{globalPrompt}} with an empty string when there is no request', () => {
+    expect(interpolatePrompt('Task: {{globalPrompt}}', [])).toBe('Task: ')
+  })
+})
+
+describe('DAGEngine parallel runs with step confirmation', () => {
+  it('asks to confirm every parallel branch and finishes once all are confirmed', async () => {
+    const broadcasts: Array<{ type: string; payload: Record<string, unknown> }> = []
+    const complete = new Map<string, (exitCode: number) => void>()
+    const processManager = {
+      materializeAttachments: () => [],
+      spawn: (
+        _runId: string, nodeId: string, _agentType: string, _agentName: string, _prompt: string,
+        _codeContext: unknown, _attachments: unknown, _projectDir: string,
+        _onLog: unknown, onComplete: (nodeId: string, exitCode: number) => void,
+      ) => {
+        complete.set(nodeId, exitCode => onComplete(nodeId, exitCode))
+      },
+      kill: () => {},
+    }
+    const store = { saveRun: async () => undefined }
+    const engine = new DAGEngine(processManager as never, store as never, msg => broadcasts.push(msg as never))
+
+    const run = await engine.startWorkflow({
+      name: 'parallel confirm',
+      globalPrompt: 'g',
+      requireConfirm: true,
+      executionMode: 'dag',
+      nodes: [
+        { id: 'A', agentName: 'planner', agentType: 'omc', promptTemplate: 'a' },
+        { id: 'B', agentName: 'designer', agentType: 'omc', promptTemplate: 'b' },
+      ],
+      edges: [],
+    })
+    expect([...complete.keys()].sort()).toEqual(['A', 'B'])
+
+    await complete.get('A')!(0)
+    await complete.get('B')!(0)
+    const confirmsFor = (nodeId: string) =>
+      broadcasts.filter(msg => msg.type === 'task:confirm_required' && msg.payload.nodeId === nodeId).length
+
+    // 前端只显示一张确认卡（最后到达的 B）；确认 B 后必须重新提示 A，而不是丢掉它
+    const beforeConfirmA = confirmsFor('A')
+    engine.confirmNode(run.id, 'B')
+    expect(confirmsFor('A')).toBe(beforeConfirmA + 1)
+    expect(engine.getActiveRuns().find(r => r.id === run.id)?.status).toBe('paused')
+
+    engine.confirmNode(run.id, 'A')
+    expect(engine.getActiveRuns().some(r => r.id === run.id)).toBe(false)
+    expect(broadcasts).toContainEqual({ type: 'task:completed', payload: { runId: run.id, roundId: 'round-1' } })
+  })
+})

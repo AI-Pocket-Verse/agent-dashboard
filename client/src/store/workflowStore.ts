@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AutoFixOffer, WorkflowRun, NodeStatus, RunStatus, CodeContext, TaskAttachment } from '../types/index'
+import type { AutoFixOffer, WorkflowRun, NodeStatus, RunStatus, CodeContext, TaskAttachment, ExecutionMode } from '../types/index'
 
 const CLIENT_NODE_LOG_WINDOW = 200
 
@@ -11,6 +11,7 @@ export interface RunnerAutoRunSession {
   codeContext: CodeContext[]
   attachments: TaskAttachment[]
   requireConfirm: boolean
+  executionMode?: ExecutionMode
 }
 
 export interface RunnerSessionState {

@@ -26,7 +26,7 @@ import { api, type RunWorkspaceEntry, type RunWorkspaceFileContent } from '../li
 import { computeVerticalDagLayout } from '../lib/workflowLayout'
 import { formatDateTime } from '../lib/dateFormat'
 import { formatCountdown, formatResetTime, getPersistedRateLimitWait, type RateLimitWait } from '../lib/rateLimit'
-import type { AutoFixOffer, WorkflowRun, WorkflowRound, NodeRun, NodeStatus, CodeContext, TaskAttachment, AiSelectResponse } from '../types/index'
+import type { AutoFixOffer, WorkflowRun, WorkflowRound, NodeRun, NodeStatus, CodeContext, TaskAttachment, AiSelectResponse, ExecutionMode } from '../types/index'
 
 interface RouteState {
   runId?: string
@@ -43,6 +43,7 @@ interface RouteState {
     codeContext: CodeContext[]
     attachments: TaskAttachment[]
     requireConfirm: boolean
+    executionMode?: ExecutionMode
   }
 }
 
@@ -895,7 +896,6 @@ function hasRouteSessionState(state: RouteState) {
     || state.templateName
     || state.codeContext?.length
     || state.attachments?.length
-    || state.autoRun
   )
 }
 
@@ -1177,7 +1177,12 @@ export default function RunnerPage() {
   useAgents()
   const location = useLocation()
   const navigate = useNavigate()
-  const locationState = (location.state ?? {}) as RouteState
+  // autoRun 只来自内存里的 runnerSession：浏览器历史里的旧 state 在刷新或后退后仍然存在，
+  // 若从它启动会重复跑一次完整任务
+  const locationState = useMemo(
+    () => ({ ...(location.state ?? {}), autoRun: undefined }) as RouteState,
+    [location.state],
+  )
   const explicitHistoryRunId = locationState.historyRunId ?? new URLSearchParams(location.search).get('historyRunId') ?? undefined
   const runnerSession = useWorkflowStore(s => s.runnerSession)
   const setRunnerSession = useWorkflowStore(s => s.setRunnerSession)
@@ -1206,6 +1211,7 @@ export default function RunnerPage() {
   const [autoFixSubmitting, setAutoFixSubmitting] = useState(false)
   const [autoFixError, setAutoFixError] = useState<string | null>(null)
   const send = useWsStore(s => s.send)
+  const lastWsError = useWsStore(s => s.lastError)
 
   const initialPrompt    = routeState.prompt ?? ''
   const agentNames       = routeState.agentNames ?? []
@@ -1231,6 +1237,8 @@ export default function RunnerPage() {
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const autoRunStartedRef = useRef(runnerSession?.autoRunStarted ?? false)
+  // 本页发出 workflow:run 的时刻；只处理在它之后到达的服务端错误
+  const autoRunSentAtRef = useRef<number | null>(null)
   const hadLiveHistoryRunRef = useRef(false)
 
   const updateAutoRunSession = useCallback((patch: AutoRunSessionPatch) => {
@@ -1261,8 +1269,8 @@ export default function RunnerPage() {
       templateName: locationState.templateName ?? '',
       codeContext: locationState.codeContext ?? [],
       attachments: locationState.attachments ?? [],
-      autoRun: locationState.autoRun ?? null,
-      autoRunStatus: locationState.autoRun ? 'selecting' : 'idle',
+      autoRun: null,
+      autoRunStatus: 'idle',
       autoRunError: null,
       autoRunStarted: false,
     })
@@ -1528,6 +1536,7 @@ export default function RunnerPage() {
       const plan = await api.selectAgents(autoRun.prompt, agents)
       assertSelectedAgents(plan)
       setPersistedAutoRunState('starting', null, true)
+      autoRunSentAtRef.current = Date.now()
       send({
         type: 'workflow:run',
         payload: {
@@ -1539,6 +1548,7 @@ export default function RunnerPage() {
           codeContext: autoRun.codeContext,
           attachments: autoRun.attachments,
           requireConfirm: autoRun.requireConfirm,
+          executionMode: autoRun.executionMode,
         },
       })
       setPersistedAutoRunState('started', null, true)
@@ -1554,6 +1564,15 @@ export default function RunnerPage() {
   useEffect(() => {
     void startAutoRun()
   }, [startAutoRun])
+
+  // 服务端拒绝了刚发出的 workflow:run（如 AI 选了同名 agent）：回到失败状态，显示原因并允许重试
+  useEffect(() => {
+    const sentAt = autoRunSentAtRef.current
+    if (!lastWsError || sentAt === null || lastWsError.at < sentAt) return
+    if (lastWsError.requestType !== 'workflow:run' || autoRunStatus !== 'started' || currentRun) return
+    autoRunSentAtRef.current = null
+    setPersistedAutoRunState('error', lastWsError.message, true)
+  }, [autoRunStatus, currentRun, lastWsError, setPersistedAutoRunState])
 
   const retryAutoRun = useCallback(() => {
     autoRunStartedRef.current = false
@@ -1750,6 +1769,15 @@ export default function RunnerPage() {
             <div className="flex justify-start">
               <div className="max-w-[88%] rounded-2xl rounded-tl-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm leading-6 text-rose-600">
                 {autoRunError ?? t('AI 任务分配失败，请重试')}
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={retryAutoRun}
+                    className="rounded-full border border-rose-300 bg-white px-3 py-1 text-xs font-medium text-rose-600 transition hover:border-rose-400"
+                  >
+                    {t('重试')}
+                  </button>
+                </div>
               </div>
             </div>
           )}

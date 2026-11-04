@@ -40,6 +40,28 @@ function renderRunner(routeState: unknown = {}) {
   )
 }
 
+// 与 Dashboard 的 AI 模式一致：会话写进内存 store，再打开运行页（不经路由 state）
+function startAutoRunSession() {
+  useWorkflowStore.getState().setRunnerSession({
+    prompt: '新的自动任务',
+    projectName: '新项目',
+    agentNames: [],
+    templateName: '',
+    codeContext: [],
+    attachments: [],
+    autoRun: {
+      prompt: '新的自动任务',
+      projectName: 'new-project',
+      codeContext: [],
+      attachments: [],
+      requireConfirm: true,
+    },
+    autoRunStatus: 'selecting',
+    autoRunError: null,
+    autoRunStarted: false,
+  })
+}
+
 function makeRun(status: WorkflowRun['status']): WorkflowRun {
   return {
     id: 'run-1',
@@ -455,6 +477,75 @@ describe('RunnerPage input behavior', () => {
     expect(screen.getByText('创建后保留的需求')).toBeInTheDocument()
   })
 
+  it('does not relaunch an AI run from stale history state after a reload or Back navigation', async () => {
+    const send = vi.fn()
+    useWsStore.getState().setSend(send)
+    apiMocks.selectAgents.mockResolvedValue({
+      nodes: [{ id: 'a', agentName: 'planner', agentType: 'omc', promptTemplate: 'p' }],
+      edges: [],
+      explanation: '',
+    })
+    // 刷新后内存 store 为空，但浏览器历史里仍可能留着旧的 autoRun state
+    useWorkflowStore.getState().setRunnerSession(null)
+
+    renderRunner({
+      prompt: '已经跑过的需求',
+      projectName: '旧项目',
+      autoRun: {
+        prompt: '已经跑过的需求',
+        projectName: 'old-project',
+        codeContext: [],
+        attachments: [],
+        requireConfirm: true,
+      },
+    })
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(apiMocks.selectAgents).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('shows the server rejection with a retry button when an AI run fails to start', async () => {
+    const send = vi.fn()
+    useWsStore.getState().setSend(send)
+    apiMocks.selectAgents.mockResolvedValue({
+      nodes: [{ id: 'a', agentName: 'planner', agentType: 'omc', promptTemplate: 'p' }],
+      edges: [],
+      explanation: '',
+    })
+    startAutoRunSession()
+    renderRunner()
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+
+    act(() => {
+      useWsStore.getState().setLastError({ message: '同一个任务中不能重复使用 Agent: planner', requestType: 'workflow:run', at: Date.now() })
+    })
+
+    expect(await screen.findByText('同一个任务中不能重复使用 Agent: planner')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+    await waitFor(() => expect(apiMocks.selectAgents).toHaveBeenCalledTimes(2))
+  })
+
+  it('ignores server errors that arrived before the AI run was sent', async () => {
+    const send = vi.fn()
+    useWsStore.getState().setSend(send)
+    useWsStore.getState().setLastError({ message: '旧错误', requestType: 'workflow:run', at: Date.now() - 60_000 })
+    apiMocks.selectAgents.mockResolvedValue({
+      nodes: [{ id: 'a', agentName: 'planner', agentType: 'omc', promptTemplate: 'p' }],
+      edges: [],
+      explanation: '',
+    })
+    startAutoRunSession()
+    renderRunner()
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+
+    expect(screen.queryByText('旧错误')).not.toBeInTheDocument()
+  })
+
   it('keeps showing the auto agent allocation card after returning to the runner tab', () => {
     useWorkflowStore.getState().setRunnerSession({
       prompt: '自动分配中的需求',
@@ -521,19 +612,8 @@ describe('RunnerPage input behavior', () => {
       createdAt: Date.now() - 1000,
     })
 
-    renderRunner({
-      prompt: '新的自动任务',
-      projectName: '新项目',
-      codeContext: [],
-      attachments: [],
-      autoRun: {
-        prompt: '新的自动任务',
-        projectName: 'new-project',
-        codeContext: [],
-        attachments: [],
-        requireConfirm: true,
-      },
-    })
+    startAutoRunSession()
+    renderRunner()
 
     expect(screen.getByText('新项目')).toBeInTheDocument()
     expect(screen.getByText('新的自动任务')).toBeInTheDocument()
@@ -555,19 +635,8 @@ describe('RunnerPage input behavior', () => {
       .mockRejectedValueOnce(rateLimitError)
       .mockReturnValueOnce(new Promise(() => undefined))
 
-    renderRunner({
-      prompt: '新的自动任务',
-      projectName: '新项目',
-      codeContext: [],
-      attachments: [],
-      autoRun: {
-        prompt: '新的自动任务',
-        projectName: 'new-project',
-        codeContext: [],
-        attachments: [],
-        requireConfirm: true,
-      },
-    })
+    startAutoRunSession()
+    renderRunner()
 
     await act(async () => {
       await Promise.resolve()
@@ -597,19 +666,8 @@ describe('RunnerPage input behavior', () => {
       explanation: 'none',
     })
 
-    renderRunner({
-      prompt: '新的自动任务',
-      projectName: '新项目',
-      codeContext: [],
-      attachments: [],
-      autoRun: {
-        prompt: '新的自动任务',
-        projectName: 'new-project',
-        codeContext: [],
-        attachments: [],
-        requireConfirm: true,
-      },
-    })
+    startAutoRunSession()
+    renderRunner()
 
     await act(async () => {
       await Promise.resolve()

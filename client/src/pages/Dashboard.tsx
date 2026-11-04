@@ -9,7 +9,7 @@ import { api } from '../lib/api'
 import { BUILTIN_TEMPLATES } from '../lib/builtinTemplates'
 import type { WorkflowTemplate } from '../types/index'
 import type { TaskMode } from '../components/TaskForm/ModeSelector'
-import type { AgentInfo, CodeContext, TaskAttachment } from '../types/index'
+import type { AgentInfo, CodeContext, ExecutionMode, TaskAttachment } from '../types/index'
 import { t } from '../lib/i18n'
 
 interface SubmitParams {
@@ -19,6 +19,7 @@ interface SubmitParams {
   codeContext: CodeContext[]
   attachments: TaskAttachment[]
   requireConfirm: boolean
+  executionMode: ExecutionMode
   selectedAgents?: AgentInfo[]
   templateId?: string
 }
@@ -42,7 +43,7 @@ export default function Dashboard() {
   }, [])
 
   const handleSubmit = useCallback(async (params: SubmitParams) => {
-    const { mode, prompt, projectName, codeContext, attachments, requireConfirm, selectedAgents, templateId } = params
+    const { mode, prompt, projectName, codeContext, attachments, requireConfirm, executionMode, selectedAgents, templateId } = params
     setError(null)
 
     if (mode === 'ai') {
@@ -60,26 +61,14 @@ export default function Dashboard() {
           codeContext,
           attachments,
           requireConfirm,
+          executionMode,
         },
         autoRunStatus: 'selecting',
         autoRunError: null,
         autoRunStarted: false,
       })
-      navigate('/runner', {
-        state: {
-          prompt,
-          projectName: displayName,
-          codeContext,
-          attachments: getRouteAttachments(attachments),
-          autoRun: {
-            prompt,
-            projectName,
-            codeContext,
-            attachments,
-            requireConfirm,
-          },
-        },
-      })
+      // 会话（含附件内容）只放内存 store，不写进浏览器历史，刷新或后退都不会重新启动
+      navigate('/runner')
       return
     }
 
@@ -129,6 +118,7 @@ export default function Dashboard() {
               codeContext,
               attachments,
               requireConfirm,
+              executionMode,
             },
           })
         }
@@ -150,6 +140,7 @@ export default function Dashboard() {
             codeContext,
             attachments,
             requireConfirm,
+            executionMode,
           },
         })
       }
