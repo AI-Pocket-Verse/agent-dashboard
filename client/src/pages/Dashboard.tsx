@@ -2,15 +2,15 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAgents } from '../hooks/useAgents'
 import { useAgentStore } from '../store/agentStore'
-import { useWsStore } from '../store/wsStore'
 import { useWorkflowStore } from '../store/workflowStore'
 import TaskForm from '../components/TaskForm/index'
 import { api } from '../lib/api'
 import { BUILTIN_TEMPLATES } from '../lib/builtinTemplates'
 import type { WorkflowTemplate } from '../types/index'
 import type { TaskMode } from '../components/TaskForm/ModeSelector'
-import type { AgentInfo, CodeContext, ExecutionMode, TaskAttachment } from '../types/index'
+import type { AgentInfo, CodeContext, ExecutionMode, TaskAttachment, WsClientMessage } from '../types/index'
 import { t } from '../lib/i18n'
+import { sendFailedMessage, sendOrNotify } from '../lib/wsSend'
 
 interface SubmitParams {
   mode: TaskMode
@@ -31,8 +31,8 @@ function getRouteAttachments(attachments: TaskAttachment[]) {
 export default function Dashboard() {
   useAgents()
   const agents = useAgentStore(s => s.agents)
-  const send = useWsStore(s => s.send)
   const setRunnerSession = useWorkflowStore(s => s.setRunnerSession)
+  const setStartRequest = useWorkflowStore(s => s.setStartRequest)
   const [templates, setTemplates] = useState<WorkflowTemplate[]>(BUILTIN_TEMPLATES)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -47,6 +47,7 @@ export default function Dashboard() {
     setError(null)
 
     if (mode === 'ai') {
+      setStartRequest(null)
       const displayName = projectName || prompt.slice(0, 60)
       setRunnerSession({
         prompt,
@@ -77,6 +78,7 @@ export default function Dashboard() {
       const displayName    = projectName || prompt.slice(0, 60)
       const routeAgents  = selectedAgents?.map(a => a.name) ?? []
       const routeTemplate = mode === 'template' ? templates.find(t => t.id === templateId)?.name ?? '' : ''
+      let message: WsClientMessage
       if (mode === 'manual') {
         const chosen = selectedAgents ?? []
         if (chosen.length === 0) {
@@ -84,7 +86,7 @@ export default function Dashboard() {
           return
         }
         if (chosen.length === 1) {
-          send({
+          message = {
             type: 'task:create',
             payload: {
               agentName: chosen[0].name,
@@ -95,7 +97,7 @@ export default function Dashboard() {
               attachments,
               requireConfirm,
             },
-          })
+          }
         } else {
           const nodes = chosen.map((a, i) => ({
             id: `node-${i}`,
@@ -107,7 +109,7 @@ export default function Dashboard() {
             from: `node-${i}`,
             to: `node-${i + 1}`,
           }))
-          send({
+          message = {
             type: 'workflow:run',
             payload: {
               name: displayName,
@@ -120,15 +122,15 @@ export default function Dashboard() {
               requireConfirm,
               executionMode,
             },
-          })
+          }
         }
-      } else if (mode === 'template') {
+      } else {
         const template = templates.find(t => t.id === templateId)
         if (!template) {
           setError(t('请选择一个模板'))
           return
         }
-        send({
+        message = {
           type: 'workflow:run',
           payload: {
             templateId,
@@ -142,8 +144,16 @@ export default function Dashboard() {
             requireConfirm,
             executionMode,
           },
-        })
+        }
       }
+      // 连接已断开时没发出去：留在创建页并提示，不跳到一个永远等不到任务的运行页
+      const sentAt = Date.now()
+      if (!sendOrNotify(message)) {
+        setError(sendFailedMessage())
+        return
+      }
+      // 运行页据此在拿到 run 之前识别「启动被服务端拒绝」，并支持原样重试
+      setStartRequest({ at: sentAt, message })
       const routeAttachments = getRouteAttachments(attachments)
       setRunnerSession({
         prompt,
@@ -168,7 +178,7 @@ export default function Dashboard() {
     } finally {
       setSubmitting(false)
     }
-  }, [agents, templates, send, navigate, setRunnerSession])
+  }, [templates, navigate, setRunnerSession, setStartRequest])
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[rgb(247,248,253)] px-4 py-8 md:px-8">

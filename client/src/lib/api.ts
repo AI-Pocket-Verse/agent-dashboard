@@ -49,6 +49,9 @@ export const api = {
     http.get<RunWorkspaceFilesResponse>(`/fs/runs/${runId}/files`, { params: path ? { path } : undefined }).then(r => r.data),
   getRunWorkspaceFileContent: (runId: string, path: string) =>
     http.get<RunWorkspaceFileContent>(`/fs/runs/${runId}/files/content`, { params: { path } }).then(r => r.data),
+  // 原始文件走带 Authorization 的请求取 blob：<img src> 无法带请求头，密码也不能放进 URL
+  getRunFileBlob: (runId: string, path: string) =>
+    http.get<Blob>(`/fs/runs/${runId}/raw`, { params: { path }, responseType: 'blob' }).then(r => r.data),
   getRunPreview: (runId: string) =>
     http.get<RunPreviewResponse>(`/fs/runs/${runId}/preview`).then(r => r.data),
 }

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AutoFixOffer, WorkflowRun, NodeStatus, RunStatus, CodeContext, TaskAttachment, ExecutionMode } from '../types/index'
+import type { AutoFixOffer, WorkflowRun, NodeStatus, RunStatus, CodeContext, TaskAttachment, ExecutionMode, WsClientMessage } from '../types/index'
 
 const CLIENT_NODE_LOG_WINDOW = 200
 
@@ -29,6 +29,12 @@ export interface RunnerSessionState {
   autoRunStarted?: boolean
 }
 
+// 创建页刚发出的启动请求：运行页在拿到 run 之前据此判断「被服务端拒绝」并支持原样重试
+export interface StartRequest {
+  at: number
+  message: WsClientMessage
+}
+
 type PendingConfirmState = {
   runId: string
   roundId?: string
@@ -47,6 +53,9 @@ interface WorkflowState {
   pendingConfirm: PendingConfirmState | null
   pendingAutoFix: AutoFixOffer | null
   runnerSession: RunnerSessionState | null
+  startRequest: StartRequest | null
+  // run 在本地进入终态的时刻；重连对账据此避免用较旧的服务端快照把它复活
+  endedRunAt: Record<string, number>
   logScrollStates: Record<string, LogScrollState>
   activeFiles: Record<string, Set<string>>
   setActiveRuns: (runs: WorkflowRun[]) => void
@@ -59,6 +68,7 @@ interface WorkflowState {
   setPendingConfirm: (data: WorkflowState['pendingConfirm']) => void
   setPendingAutoFix: (data: WorkflowState['pendingAutoFix']) => void
   setRunnerSession: (session: RunnerSessionState | null) => void
+  setStartRequest: (request: StartRequest | null) => void
   setLogScrollState: (key: string, state: LogScrollState) => void
   setFileActivity: (runId: string, path: string, active: boolean) => void
   clearActiveFiles: (runId: string) => void
@@ -167,6 +177,8 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   pendingConfirm: null,
   pendingAutoFix: null,
   runnerSession: null,
+  startRequest: null,
+  endedRunAt: {},
   logScrollStates: {},
   activeFiles: {},
 
@@ -208,6 +220,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
     if (!isLiveRunStatus(status)) {
       return {
         activeRuns: s.activeRuns.filter(r => r.id !== runId),
+        endedRunAt: { ...s.endedRunAt, [runId]: Date.now() },
         ...clearRunSessionState(s, runId),
       }
     }
@@ -251,17 +264,20 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
   completeRun: (runId) => set(s => ({
     activeRuns: s.activeRuns.filter(r => r.id !== runId),
+    endedRunAt: { ...s.endedRunAt, [runId]: Date.now() },
     ...clearRunSessionState(s, runId),
   })),
 
   failRun: (runId, _nodeId, _exitCode) => set(s => ({
     activeRuns: s.activeRuns.filter(r => r.id !== runId),
+    endedRunAt: { ...s.endedRunAt, [runId]: Date.now() },
     ...clearRunSessionState(s, runId),
   })),
 
   setPendingConfirm: (data) => set({ pendingConfirm: data }),
   setPendingAutoFix: (data) => set({ pendingAutoFix: data }),
   setRunnerSession: (session) => set({ runnerSession: session }),
+  setStartRequest: (request) => set({ startRequest: request }),
   setLogScrollState: (key, state) => set(s => ({
     logScrollStates: { ...s.logScrollStates, [key]: state },
   })),
@@ -280,5 +296,5 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
     return { activeFiles: next }
   }),
 
-  reset: () => set({ activeRuns: [], pendingConfirm: null, pendingAutoFix: null, runnerSession: null, logScrollStates: {}, activeFiles: {} }),
+  reset: () => set({ activeRuns: [], pendingConfirm: null, pendingAutoFix: null, runnerSession: null, startRequest: null, endedRunAt: {}, logScrollStates: {}, activeFiles: {} }),
 }))

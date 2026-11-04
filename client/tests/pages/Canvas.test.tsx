@@ -456,3 +456,90 @@ describe('Canvas dialogs and backdrop', () => {
     expect(screen.queryByPlaceholderText('例如：全流程开发')).not.toBeInTheDocument()
   })
 })
+
+const httpError = (status: number, data?: unknown) =>
+  Object.assign(new Error(`Request failed with status code ${status}`), { isAxiosError: true, response: { status, data } })
+
+describe('Canvas save and delete failures', () => {
+  it('shows the server reason and keeps the unsaved baseline when updating an existing template fails', async () => {
+    vi.mocked(api.updateTemplate).mockRejectedValueOnce(httpError(400, { error: '工作流连线成环，无法保存' }))
+    renderCanvas()
+    await loadTemplate(/^模板A/)
+    connect('n1', 'n3')
+
+    fireEvent.click(screen.getByRole('button', { name: '保存模板' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('工作流连线成环，无法保存')
+    // 保存失败不能把当前内容当成基线：离开模板仍要询问
+    fireEvent.click(screen.getByRole('button', { name: /^模板B/ }))
+    expect(screen.getByText(DISCARD_TITLE)).toBeInTheDocument()
+  })
+
+  it('falls back to a generic message when the failed update has no reason', async () => {
+    vi.mocked(api.updateTemplate).mockRejectedValueOnce(new Error('Network Error'))
+    renderCanvas()
+    await loadTemplate(/^模板A/)
+    connect('n1', 'n3')
+
+    fireEvent.click(screen.getByRole('button', { name: '保存模板' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('保存失败，请稍后重试')
+  })
+
+  it('clears the save error after a later successful save', async () => {
+    vi.mocked(api.updateTemplate).mockRejectedValueOnce(httpError(500))
+    renderCanvas()
+    await loadTemplate(/^模板A/)
+    connect('n1', 'n3')
+    fireEvent.click(screen.getByRole('button', { name: '保存模板' }))
+    await screen.findByRole('alert')
+
+    fireEvent.click(screen.getByRole('button', { name: '保存模板' }))
+
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+  })
+
+  it('keeps the delete dialog open with an error when deleting a template fails', async () => {
+    vi.mocked(api.deleteTemplate).mockRejectedValueOnce(httpError(500))
+    renderCanvas()
+    const button = await screen.findByRole('button', { name: /^模板B/ })
+    fireEvent.contextMenu(button)
+    fireEvent.click(screen.getByRole('button', { name: '删除模板' }))
+
+    fireEvent.click(screen.getByRole('button', { name: '确认删除' }))
+
+    expect(await screen.findByText('删除失败，请稍后重试')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '确认删除' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^模板B/ })).toBeInTheDocument()
+  })
+
+  const openCreateDialog = async () => {
+    renderCanvas()
+    await screen.findByRole('button', { name: /^模板A/ })
+    fireEvent.click(screen.getByRole('button', { name: '+ 新建' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存模板' }))
+    fireEvent.change(screen.getByPlaceholderText('例如：全流程开发'), { target: { value: '新模板' } })
+    fireEvent.click(screen.getByRole('button', { name: '确认保存' }))
+  }
+
+  it('shows the server error string in the create dialog for non-409 failures', async () => {
+    vi.mocked(api.createTemplate).mockRejectedValueOnce(httpError(400, { error: '工作流连线成环，无法保存' }))
+    await openCreateDialog()
+
+    expect(await screen.findByText('工作流连线成环，无法保存')).toBeInTheDocument()
+  })
+
+  it('keeps the unique-name message for 409 in the create dialog', async () => {
+    vi.mocked(api.createTemplate).mockRejectedValueOnce(httpError(409, { error: 'duplicate' }))
+    await openCreateDialog()
+
+    expect(await screen.findByText('模板名称必须唯一，已自动忽略首尾空格，请使用其他名称')).toBeInTheDocument()
+  })
+
+  it('shows the generic message in the create dialog when the failure has no body error', async () => {
+    vi.mocked(api.createTemplate).mockRejectedValueOnce(httpError(500, {}))
+    await openCreateDialog()
+
+    expect(await screen.findByText('保存失败，请稍后重试')).toBeInTheDocument()
+  })
+})

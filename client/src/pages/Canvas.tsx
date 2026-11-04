@@ -140,6 +140,12 @@ const getDetachedNodePosition = (nodes: AgentNode[]) => {
 
 const normalizeTemplateName = (value: string) => value.trim()
 
+// 服务端失败响应体里的 error 字符串（如「工作流连线成环…」），没有则返回 null
+const getResponseError = (error: unknown) => {
+  const message = (error as { response?: { data?: { error?: unknown } } } | null)?.response?.data?.error
+  return typeof message === 'string' && message.trim() ? message.trim() : null
+}
+
 export default function Canvas() {
   const [templates, setTemplates] = useState<LocalWorkflowTemplate[]>(BUILTIN_TEMPLATES)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -170,6 +176,9 @@ export default function Canvas() {
   } | null>(null)
   const [templateFormDialog, setTemplateFormDialog] = useState<TemplateFormDialogState | null>(null)
   const [templateDeleteDialog, setTemplateDeleteDialog] = useState<WorkflowTemplate | null>(null)
+  const [templateDeleteError, setTemplateDeleteError] = useState<string | null>(null)
+  // 保存已有模板失败的原因，显示在画布标题栏下方
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [draftTemplate, setDraftTemplate] = useState<DraftTemplateState | null>(null)
   const [draftExitAction, setDraftExitAction] = useState<DraftExitAction | null>(null)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
@@ -185,6 +194,11 @@ export default function Canvas() {
   useEffect(() => {
     api.getTemplates().then(setTemplates).catch(console.error)
   }, [])
+
+  // 切换模板后上一个模板的保存错误不再相关
+  useEffect(() => {
+    setSaveError(null)
+  }, [activeId])
 
   const activeTemplate = useMemo(
     () => templates.find(template => template.id === activeId) ?? null,
@@ -638,18 +652,24 @@ export default function Canvas() {
         promptTemplate: node.data.promptTemplate,
       }))
       const payloadEdges = edgePairsFromCanvas(edges)
-      const saved = await api.updateTemplate({
-        ...activeTemplate,
-        nodes: payloadNodes,
-        edges: payloadEdges,
-      })
+      setSaveError(null)
+      try {
+        const saved = await api.updateTemplate({
+          ...activeTemplate,
+          nodes: payloadNodes,
+          edges: payloadEdges,
+        })
 
-      setTemplates(prev => prev.map(template => (
-        template.id === saved.id ? saved : template
-      )))
-      // 以实际提交的内容为新基线；保存期间的新改动仍会被识别为未保存
-      setBaselineSnapshot(snapshotOf(payloadNodes, payloadEdges))
-      setSidebarTab('templates')
+        setTemplates(prev => prev.map(template => (
+          template.id === saved.id ? saved : template
+        )))
+        // 以实际提交的内容为新基线；保存期间的新改动仍会被识别为未保存
+        setBaselineSnapshot(snapshotOf(payloadNodes, payloadEdges))
+        setSidebarTab('templates')
+      } catch (error) {
+        // 失败时不动 baselineSnapshot：内容仍是未保存状态
+        setSaveError(getResponseError(error) ?? t('保存失败，请稍后重试'))
+      }
       return
     }
 
@@ -739,7 +759,7 @@ export default function Canvas() {
     } catch (error) {
       const message = axios.isAxiosError(error) && error.response?.status === 409
         ? t('模板名称必须唯一，已自动忽略首尾空格，请使用其他名称')
-        : t('保存失败，请稍后重试')
+        : getResponseError(error) ?? t('保存失败，请稍后重试')
       setTemplateFormDialog(prev => prev ? { ...prev, error: message } : prev)
     }
   }, [edges, nodes, templateFormDialog, templateNameConflictError, templates])
@@ -998,12 +1018,20 @@ export default function Canvas() {
     }
 
     setTemplateContextMenu(null)
+    setTemplateDeleteError(null)
     setTemplateDeleteDialog(target)
   }, [activeId, clearCanvas, templates])
 
   const handleConfirmDeleteTemplate = useCallback(async () => {
     if (!templateDeleteDialog) return
-    await api.deleteTemplate(templateDeleteDialog.id)
+    setTemplateDeleteError(null)
+    try {
+      await api.deleteTemplate(templateDeleteDialog.id)
+    } catch (error) {
+      // 删除失败：弹窗保持打开并显示原因，模板仍在列表里
+      setTemplateDeleteError(getResponseError(error) ?? t('删除失败，请稍后重试'))
+      return
+    }
     setTemplates(prev => prev.filter(template => template.id !== templateDeleteDialog.id))
     setTemplateDeleteDialog(null)
 
@@ -1243,6 +1271,12 @@ export default function Canvas() {
           </div>
         )}
 
+        {saveError && (
+          <div role="alert" className="mx-4 mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600 md:mx-5">
+            {saveError}
+          </div>
+        )}
+
         <div className="min-h-0 flex flex-1 overflow-hidden">
           {hasActiveWorkflow ? (
             <div
@@ -1434,6 +1468,9 @@ export default function Canvas() {
         <div className="rounded-[20px] border border-rose-200 bg-rose-50/80 px-4 py-3 text-[13px] leading-6 text-rose-700">
           {t('这会删除模板定义，但不会影响已经保存的历史运行记录。')}
         </div>
+        {templateDeleteError && (
+          <div role="alert" className="mt-3 text-[12px] text-rose-600">{templateDeleteError}</div>
+        )}
       </DialogShell>
 
       <DialogShell

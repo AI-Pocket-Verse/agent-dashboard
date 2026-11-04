@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import type { WorkflowRun } from '../types/index'
 import { useWorkflowStore } from '../store/workflowStore'
-import { useWsStore } from '../store/wsStore'
 import { formatDateTime } from '../lib/dateFormat'
 import { formatCountdown, getPersistedRateLimitWait } from '../lib/rateLimit'
 import { t } from '../lib/i18n'
+import { errorReason } from '../lib/errorReason'
+import { sendOrNotify } from '../lib/wsSend'
 
 const STATUS_BADGE: Record<string, string> = {
   completed: 'border border-[rgba(31,154,81,0.14)] bg-[rgba(31,154,81,0.08)] text-[#0f7a3a]',
@@ -107,7 +108,6 @@ function getRunRateLimitWait(run: WorkflowRun, now: number) {
 
 export default function History() {
   const navigate = useNavigate()
-  const send = useWsStore(s => s.send)
   const upsertRun = useWorkflowStore(s => s.upsertRun)
   const setPendingConfirm = useWorkflowStore(s => s.setPendingConfirm)
   const setRunnerSession = useWorkflowStore(s => s.setRunnerSession)
@@ -116,9 +116,12 @@ export default function History() {
   const [runs, setRuns] = useState<WorkflowRun[]>([])
   const [snapshotToast, setSnapshotToast] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  // 加载失败要与「暂无历史记录」区分开，并允许重试
+  const [loadError, setLoadError] = useState<string | null>(null)
 
-  useEffect(() => {
-    Promise.all([
+  const loadRuns = useCallback(() => {
+    setLoadError(null)
+    return Promise.all([
       api.getRuns(),
       api.getActiveRuns().catch(() => [] as WorkflowRun[]),
     ])
@@ -127,8 +130,15 @@ export default function History() {
         setRuns(savedRuns.map(run => liveById.get(run.id) ?? run))
         liveRuns.forEach(upsertRun)
       })
-      .catch(console.error)
+      .catch(error => {
+        console.error(error)
+        setLoadError(errorReason(error) || t('未知错误'))
+      })
   }, [upsertRun])
+
+  useEffect(() => {
+    void loadRuns()
+  }, [loadRuns])
 
   useEffect(() => {
     if (!snapshotToast) return
@@ -192,9 +202,26 @@ export default function History() {
   }
 
   const terminateRun = (run: WorkflowRun) => {
-    send({ type: 'task:cancel', payload: { runId: run.id } })
+    // 没发出去（连接已断开）就不能把本地状态改成已终止
+    if (!sendOrNotify({ type: 'task:cancel', payload: { runId: run.id } })) return
     setRunStatus(run.id, 'failed')
     setRuns(current => current.map(item => item.id === run.id ? { ...item, status: 'failed', completedAt: Date.now() } : item))
+  }
+
+  if (runs.length === 0 && loadError) {
+    return (
+      <div className="flex h-full min-h-0 flex-col items-center justify-center gap-3 bg-[rgb(247,248,253)] px-8 text-center">
+        <div role="alert" className="text-sm font-medium text-slate-600">{t('历史记录加载失败')}</div>
+        <div className="text-xs text-slate-400">{loadError}</div>
+        <button
+          type="button"
+          onClick={() => void loadRuns()}
+          className="mt-1 rounded-full bg-slate-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+        >
+          {t('重试')}
+        </button>
+      </div>
+    )
   }
 
   if (runs.length === 0) {

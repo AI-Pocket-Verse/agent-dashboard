@@ -1,7 +1,8 @@
 import { Routes, Route, NavLink } from 'react-router-dom'
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useWebSocket } from './hooks/useWebSocket'
 import { getToken } from './lib/auth'
+import { reconcileRuns } from './lib/reconcileRuns'
 import { t, useLocaleStore, type LocaleSetting } from './lib/i18n'
 import { useAgentStore } from './store/agentStore'
 import { useWorkflowStore } from './store/workflowStore'
@@ -221,6 +222,8 @@ export default function App() {
   const { upsertRun, appendLog, setNodeStatus, setRunStatus, completeRun, failRun, setPendingConfirm, setPendingAutoFix, setFileActivity, clearActiveFiles } = useWorkflowStore()
   const setSend = useWsStore(s => s.setSend)
   const setLastError = useWsStore(s => s.setLastError)
+  const lastError = useWsStore(s => s.lastError)
+  const mountedAtRef = useRef(Date.now())
 
   const handleMessage = useCallback((msg: WsServerMessage) => {
     switch (msg.type) {
@@ -268,11 +271,18 @@ export default function App() {
     }
   }, [setAgents, setAgentStatus, upsertRun, appendLog, setNodeStatus, setRunStatus, completeRun, failRun, setPendingConfirm, setPendingAutoFix, setFileActivity, clearActiveFiles, setLastError])
 
-  const { send } = useWebSocket(WS_URL, getToken(), handleMessage)
+  // 每次连上（含重连）后对账活跃任务，补回断线期间错过的完成/失败事件
+  const { send } = useWebSocket(WS_URL, getToken(), handleMessage, reconcileRuns)
 
   useEffect(() => {
     setSend(send)
   }, [send, setSend])
+
+  // 本地发送失败（连接已断开）经 wsStore.lastError 上报，不带 requestType；复用同一个 toast
+  useEffect(() => {
+    if (!lastError || lastError.requestType || lastError.at < mountedAtRef.current) return
+    setServerError(lastError.message)
+  }, [lastError])
 
   useEffect(() => {
     const root = document.documentElement

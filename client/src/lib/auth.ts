@@ -19,15 +19,25 @@ export function clearToken(): void {
   localStorage.removeItem(STORAGE_KEY)
 }
 
-// ok：可以进入；forbidden：服务端处于免密模式但拒绝了非本机访问（403），输入密码也没用；denied：需要密码或密码错误
+// ok：可以进入；forbidden：服务端处于免密模式但拒绝了非本机访问（403 且响应体含 DASHBOARD_SECRET），输入密码也没用；
+// denied：需要密码、密码错误，或其他失败（含反向代理等返回的普通 403）
 export type TokenCheck = 'ok' | 'forbidden' | 'denied'
 
 export async function verifyToken(token: string): Promise<TokenCheck> {
   try {
     const res = await fetch('/api/health', { headers: { Authorization: `Bearer ${token}` } })
     if (res.ok) return 'ok'
-    return res.status === 403 ? 'forbidden' : 'denied'
+    if (res.status === 403 && (await readBody(res)).includes('DASHBOARD_SECRET')) return 'forbidden'
+    return 'denied'
   } catch {
     return 'denied'
+  }
+}
+
+async function readBody(res: Response): Promise<string> {
+  try {
+    return await res.text()
+  } catch {
+    return ''
   }
 }

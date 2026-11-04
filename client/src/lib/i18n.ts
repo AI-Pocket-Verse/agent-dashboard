@@ -359,4 +359,12 @@ const EN: Record<string, string> = {
   '支持修改起点和终点，也可以直接拖动线头或线尾快速改线。': 'Change the source and target, or drag either end of the edge directly.',
   '起点节点': 'Source node',
   '终点节点': 'Target node',
+  '连接已断开，正在重连，请稍后重试': 'Connection lost, reconnecting. Please try again shortly',
+  '图片加载中...': 'Loading image...',
+  '图片加载失败': 'Failed to load image',
+  '历史记录加载失败': 'Failed to load history',
+  '未知错误': 'Unknown error',
+  '刷新': 'Refresh',
+  '删除失败，请稍后重试': 'Failed to delete, please try again later',
+  '返回创建页': 'Back to Create',
 }

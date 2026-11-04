@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { githubGist } from 'react-syntax-highlighter/dist/esm/styles/hljs'
 import typescript from 'react-syntax-highlighter/dist/esm/languages/hljs/typescript'
@@ -15,6 +16,8 @@ import sql from 'react-syntax-highlighter/dist/esm/languages/hljs/sql'
 import yaml from 'react-syntax-highlighter/dist/esm/languages/hljs/yaml'
 import MarkdownText from '../MarkdownText/index'
 import { t } from '../../lib/i18n'
+import { api } from '../../lib/api'
+import { errorReason } from '../../lib/errorReason'
 
 SyntaxHighlighter.registerLanguage('typescript', typescript)
 SyntaxHighlighter.registerLanguage('javascript', javascript)
@@ -54,14 +57,60 @@ function getExt(path: string) {
 }
 
 interface Props {
+  runId: string
   path: string
   content: string
   isBinary: boolean
   truncated: boolean
-  rawUrl: string
 }
 
-export default function FileViewer({ path, content, isBinary, truncated, rawUrl }: Props) {
+type ImageState =
+  | { status: 'loading' }
+  | { status: 'ready'; url: string }
+  | { status: 'error'; reason: string }
+
+// 图片经带 Authorization 的请求取 blob 再显示；切换文件或卸载时释放 blob URL，只接受最新一次请求的结果
+function ImagePreview({ runId, path }: { runId: string; path: string }) {
+  const [state, setState] = useState<ImageState>({ status: 'loading' })
+
+  useEffect(() => {
+    let stale = false
+    let objectUrl: string | null = null
+    setState({ status: 'loading' })
+    api.getRunFileBlob(runId, path)
+      .then(blob => {
+        if (stale) return
+        objectUrl = URL.createObjectURL(blob)
+        setState({ status: 'ready', url: objectUrl })
+      })
+      .catch(error => {
+        if (!stale) setState({ status: 'error', reason: errorReason(error) })
+      })
+    return () => {
+      stale = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [runId, path])
+
+  if (state.status === 'loading') {
+    return <div className="p-4 text-sm text-slate-400">{t('图片加载中...')}</div>
+  }
+  if (state.status === 'error') {
+    return (
+      <div className="p-4 text-sm text-slate-500">
+        <div>{t('图片加载失败')}</div>
+        {state.reason && <div className="mt-1 text-xs text-slate-400">{state.reason}</div>}
+      </div>
+    )
+  }
+  return (
+    <div className="flex items-center justify-center p-4">
+      <img src={state.url} alt={path} className="max-h-[70vh] max-w-full object-contain" />
+    </div>
+  )
+}
+
+export default function FileViewer({ runId, path, content, isBinary, truncated }: Props) {
   const ext = getExt(path)
 
   if (truncated) {
@@ -73,15 +122,7 @@ export default function FileViewer({ path, content, isBinary, truncated, rawUrl 
   }
 
   if (IMAGE_EXTS.has(ext)) {
-    return (
-      <div className="flex items-center justify-center p-4">
-        <img
-          src={rawUrl}
-          alt={path}
-          className="max-h-[70vh] max-w-full object-contain"
-        />
-      </div>
-    )
+    return <ImagePreview runId={runId} path={path} />
   }
 
   if (isBinary) {

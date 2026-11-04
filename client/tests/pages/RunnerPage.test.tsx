@@ -83,7 +83,8 @@ describe('RunnerPage input behavior', () => {
 
   beforeEach(() => {
     useWorkflowStore.getState().reset()
-    useWsStore.getState().setSend(() => undefined)
+    // 调整原因：send 现在返回是否发送成功，默认桩改为成功
+    useWsStore.getState().setSend(() => true)
     apiMocks.getActiveRuns.mockReset()
     apiMocks.getActiveRuns.mockResolvedValue([])
     apiMocks.getRun.mockReset()
@@ -478,7 +479,7 @@ describe('RunnerPage input behavior', () => {
   })
 
   it('does not relaunch an AI run from stale history state after a reload or Back navigation', async () => {
-    const send = vi.fn()
+    const send = vi.fn(() => true) // 调整原因：send 现在返回是否发送成功
     useWsStore.getState().setSend(send)
     apiMocks.selectAgents.mockResolvedValue({
       nodes: [{ id: 'a', agentName: 'planner', agentType: 'omc', promptTemplate: 'p' }],
@@ -510,7 +511,7 @@ describe('RunnerPage input behavior', () => {
   })
 
   it('shows the server rejection with a retry button when an AI run fails to start', async () => {
-    const send = vi.fn()
+    const send = vi.fn(() => true) // 调整原因：send 现在返回是否发送成功
     useWsStore.getState().setSend(send)
     apiMocks.selectAgents.mockResolvedValue({
       nodes: [{ id: 'a', agentName: 'planner', agentType: 'omc', promptTemplate: 'p' }],
@@ -531,7 +532,7 @@ describe('RunnerPage input behavior', () => {
   })
 
   it('ignores server errors that arrived before the AI run was sent', async () => {
-    const send = vi.fn()
+    const send = vi.fn(() => true) // 调整原因：send 现在返回是否发送成功
     useWsStore.getState().setSend(send)
     useWsStore.getState().setLastError({ message: '旧错误', requestType: 'workflow:run', at: Date.now() - 60_000 })
     apiMocks.selectAgents.mockResolvedValue({
@@ -658,7 +659,7 @@ describe('RunnerPage input behavior', () => {
   })
 
   it('shows an error instead of starting an empty auto workflow when AI selects no agents', async () => {
-    const send = vi.fn()
+    const send = vi.fn(() => true) // 调整原因：send 现在返回是否发送成功
     useWsStore.getState().setSend(send)
     apiMocks.selectAgents.mockResolvedValue({
       nodes: [],
@@ -856,7 +857,7 @@ describe('RunnerPage input behavior', () => {
   })
 
   it('shows the rule-suggested fix agent in the auto-fix card and triggers a continue with it on accept', async () => {
-    const send = vi.fn()
+    const send = vi.fn(() => true) // 调整原因：send 现在返回是否发送成功
     useWsStore.getState().setSend(send)
     const run = makeRun('paused')
     useWorkflowStore.getState().upsertRun(run)
@@ -893,7 +894,7 @@ describe('RunnerPage input behavior', () => {
   })
 
   it('sends task:auto_fix_decline when the user declines the auto-fix offer', () => {
-    const send = vi.fn()
+    const send = vi.fn(() => true) // 调整原因：send 现在返回是否发送成功
     useWsStore.getState().setSend(send)
     const run = makeRun('paused')
     useWorkflowStore.getState().upsertRun(run)

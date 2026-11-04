@@ -7,7 +7,9 @@ import { useAgentStore } from '../../src/store/agentStore'
 import { useWorkflowStore } from '../../src/store/workflowStore'
 import type { WorkflowRun } from '../../src/types/index'
 
-const send = vi.fn()
+// send 现在返回是否发送成功；默认成功，失败用例单独改成 false
+const send = vi.fn((_msg: unknown) => true)
+const setLastError = vi.fn()
 const getRuns = vi.fn()
 const getRun = vi.fn()
 const getActiveRuns = vi.fn()
@@ -26,9 +28,11 @@ vi.mock('../../src/lib/api', () => ({
   },
 }))
 
-vi.mock('../../src/store/wsStore', () => ({
-  useWsStore: (selector: (state: { send: typeof send }) => unknown) => selector({ send }),
-}))
+// 失败提示经 wsStore.getState().setLastError 上报，mock 需要一并提供
+vi.mock('../../src/store/wsStore', () => {
+  const state = () => ({ send, setLastError, lastError: null })
+  return { useWsStore: Object.assign((selector: (s: ReturnType<typeof state>) => unknown) => selector(state()), { getState: state }) }
+})
 
 vi.mock('../../src/hooks/useAgents', () => ({
   useAgents: () => undefined,
@@ -84,6 +88,7 @@ describe('History active run actions', () => {
 
   beforeEach(() => {
     send.mockClear()
+    setLastError.mockClear()
     getRuns.mockReset()
     getRun.mockReset()
     getActiveRuns.mockReset()
@@ -362,5 +367,57 @@ describe('History active run actions', () => {
     })
 
     expect(within(card).getByText('可继续')).toBeInTheDocument()
+  })
+})
+
+describe('History failure handling', () => {
+  beforeEach(() => {
+    send.mockClear()
+    send.mockImplementation(() => true)
+    setLastError.mockClear()
+    getRuns.mockReset()
+    getActiveRuns.mockReset()
+    getActiveRuns.mockResolvedValue([])
+    useWorkflowStore.getState().reset()
+    useAgentStore.getState().reset()
+  })
+
+  it('keeps the run active and reports the reconnect hint when terminate cannot be sent', async () => {
+    const run = makeRun()
+    getRuns.mockResolvedValue([run])
+    useWorkflowStore.getState().upsertRun(run)
+    send.mockImplementation(() => false)
+    renderHistory()
+    const card = await screen.findByTestId('run-card-run-1')
+
+    fireEvent.click(within(card).getByRole('button', { name: '终止运行' }))
+
+    expect(setLastError).toHaveBeenCalledWith(expect.objectContaining({ message: '连接已断开，正在重连，请稍后重试' }))
+    expect(useWorkflowStore.getState().activeRuns.map(r => r.id)).toContain('run-1')
+    expect(within(screen.getByTestId('run-card-run-1')).queryByText('失败/取消')).not.toBeInTheDocument()
+    expect(within(screen.getByTestId('run-card-run-1')).getByRole('button', { name: '终止运行' })).toBeInTheDocument()
+  })
+
+  it('shows a load failure with the reason and a retry button instead of the empty state', async () => {
+    getRuns.mockRejectedValueOnce(Object.assign(new Error('Request failed'), { response: { status: 500 } }))
+    renderHistory()
+
+    expect(await screen.findByText('历史记录加载失败')).toBeInTheDocument()
+    expect(screen.getByText(/500/)).toBeInTheDocument()
+    expect(screen.queryByText('暂无历史记录')).not.toBeInTheDocument()
+
+    getRuns.mockResolvedValueOnce([makeRun({ id: 'run-9', name: 'Recovered project', status: 'completed', completedAt: 1700000100000, nodes: [{ id: 'n', agentName: 'planner', agentType: 'omc', prompt: 'p', codeContext: [], status: 'completed', logs: [] }], edges: [] })])
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+
+    expect((await screen.findAllByText('Recovered project')).length).toBeGreaterThan(0)
+    expect(screen.queryByText('历史记录加载失败')).not.toBeInTheDocument()
+  })
+
+  it('still shows the empty state when the server really has no history', async () => {
+    getRuns.mockResolvedValue([])
+    renderHistory()
+
+    expect(await screen.findByText('暂无历史记录')).toBeInTheDocument()
+    expect(screen.queryByText('历史记录加载失败')).not.toBeInTheDocument()
   })
 })

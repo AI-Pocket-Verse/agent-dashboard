@@ -73,6 +73,8 @@ describe('Dashboard task creation', () => {
 
   beforeEach(() => {
     send.mockReset()
+    // 调整原因：send 现在返回是否发送成功，undefined 会被当作发送失败
+    send.mockReturnValue(true)
     useWorkflowStore.getState().reset()
     useAgentStore.getState().setAgents([
       { name: 'planner', type: 'omc', description: '需求规划', status: 'idle' },

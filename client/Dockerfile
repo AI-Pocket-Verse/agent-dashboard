@@ -2,7 +2,7 @@
 # the client resolves @agent-dashboard/shared from ../shared.
 FROM node:22-bookworm-slim AS build
 
-RUN npm install -g pnpm@10
+RUN npm install -g pnpm@10.34.9
 
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./

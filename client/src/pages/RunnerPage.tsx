@@ -11,6 +11,7 @@ import ConfirmCard from '../components/ConfirmCard/index'
 import WorkflowInspector from '../components/WorkflowInspector/index'
 import MarkdownText from '../components/MarkdownText/index'
 import { t } from '../lib/i18n'
+import { sendFailedMessage, sendOrNotify } from '../lib/wsSend'
 import {
   WORKFLOW_EDGE_MARKER_COLOR,
   WORKFLOW_EDGE_STROKE,
@@ -168,6 +169,21 @@ function EmptyState({ hint }: { hint?: string }) {
   )
 }
 
+// 用户消息旁的头像：渐变圆形 + 内联人形图标（自绘 path，不依赖图标库）
+function UserAvatar() {
+  return (
+    <div
+      data-testid="user-avatar"
+      className="flex h-7 w-7 shrink-0 items-center justify-center self-end rounded-full bg-[radial-gradient(circle_at_30%_30%,#ffcff6_0%,#c5bcff_42%,#8e92ff_100%)] text-white select-none"
+    >
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" className="h-4 w-4">
+        <circle cx="8" cy="5.5" r="2.7" />
+        <path d="M2.8 14c0-2.9 2.3-5 5.2-5s5.2 2.1 5.2 5c0 .4-.3.7-.7.7H3.5c-.4 0-.7-.3-.7-.7Z" />
+      </svg>
+    </div>
+  )
+}
+
 function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
@@ -186,6 +202,8 @@ function CodeTab({ run, onPreviewFile }: { run: WorkflowRun | null; onPreviewFil
   const [error, setError] = useState<string | null>(null)
   const activeFilesMap = useWorkflowStore(s => s.activeFiles)
   const activeFiles = activeFilesMap[runId] ?? EMPTY_SET
+  // 读取文件内容的请求序号：只接受最后一次点击的结果与 loading 状态
+  const openSeqRef = useRef(0)
 
   const isEntryActive = (entry: RunWorkspaceEntry): boolean => {
     if (entry.type === 'file') return activeFiles.has(entry.path)
@@ -200,6 +218,9 @@ function CodeTab({ run, onPreviewFile }: { run: WorkflowRun | null; onPreviewFil
     setCurrentPath('')
     setSelectedPath(null)
     setSelectedContent(null)
+    // 切换任务后，旧任务还在路上的文件请求一律作废
+    openSeqRef.current++
+    setIsLoadingContent(false)
   }, [runId])
 
   useEffect(() => {
@@ -245,12 +266,16 @@ function CodeTab({ run, onPreviewFile }: { run: WorkflowRun | null; onPreviewFil
 
   const openFile = useCallback((file: RunWorkspaceEntry) => {
     if (!runId) return
+    const seq = ++openSeqRef.current
     setSelectedPath(file.path)
     setSelectedContent(null)
     setIsLoadingContent(true)
     api.getRunWorkspaceFileContent(runId, file.path)
-      .then(setSelectedContent)
+      .then(content => {
+        if (seq === openSeqRef.current) setSelectedContent(content)
+      })
       .catch(() => {
+        if (seq !== openSeqRef.current) return
         setSelectedContent({
           path: file.path,
           size: file.size,
@@ -260,7 +285,9 @@ function CodeTab({ run, onPreviewFile }: { run: WorkflowRun | null; onPreviewFil
           truncated: false,
         })
       })
-      .finally(() => setIsLoadingContent(false))
+      .finally(() => {
+        if (seq === openSeqRef.current) setIsLoadingContent(false)
+      })
   }, [runId])
 
   const handleEntryClick = (entry: RunWorkspaceEntry) => {
@@ -396,11 +423,11 @@ function CodeTab({ run, onPreviewFile }: { run: WorkflowRun | null; onPreviewFil
           )}
           {selectedContent && (
             <FileViewer
+              runId={runId}
               path={selectedContent.path}
               content={selectedContent.content}
               isBinary={selectedContent.isBinary}
               truncated={selectedContent.truncated}
-              rawUrl={`/api/fs/runs/${runId}/raw?path=${encodeURIComponent(selectedContent.path)}`}
             />
           )}
         </div>
@@ -1173,6 +1200,9 @@ function LiveRunList({ runs, onSelect, onCreate }: { runs: WorkflowRun[]; onSele
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+// 服务端对 workflow:run / workflow:continue 的拒绝是即时回复；超过这个间隔的同类错误不属于本次启动
+const START_REJECTION_WINDOW_MS = 30_000
+
 export default function RunnerPage() {
   useAgents()
   const location = useLocation()
@@ -1210,8 +1240,10 @@ export default function RunnerPage() {
   const setPendingAutoFix = useWorkflowStore(s => s.setPendingAutoFix)
   const [autoFixSubmitting, setAutoFixSubmitting] = useState(false)
   const [autoFixError, setAutoFixError] = useState<string | null>(null)
-  const send = useWsStore(s => s.send)
   const lastWsError = useWsStore(s => s.lastError)
+
+  const startRequest = useWorkflowStore(s => s.startRequest)
+  const setStartRequest = useWorkflowStore(s => s.setStartRequest)
 
   const initialPrompt    = routeState.prompt ?? ''
   const agentNames       = routeState.agentNames ?? []
@@ -1240,6 +1272,8 @@ export default function RunnerPage() {
   // 本页发出 workflow:run 的时刻；只处理在它之后到达的服务端错误
   const autoRunSentAtRef = useRef<number | null>(null)
   const hadLiveHistoryRunRef = useRef(false)
+  // 本页发出 workflow:continue 的时刻；只处理在它之后到达的服务端错误
+  const continueSentAtRef = useRef<number | null>(null)
 
   const updateAutoRunSession = useCallback((patch: AutoRunSessionPatch) => {
     const session = useWorkflowStore.getState().runnerSession
@@ -1299,6 +1333,18 @@ export default function RunnerPage() {
   const displayRun = createDisplayRun(sourceDisplayRun, selectedRound)
   const isHistoryDetail = Boolean(historyRun && !currentRun)
   const hasRunningRound = rounds.some(round => round.status === 'running' || round.status === 'paused')
+  // 创建页刚发出的启动请求被服务端拒绝（且还没拿到 run）：显示原因，而不是空白页。
+  // 由 store 里的 startRequest 与 lastError 派生，不另存状态
+  const startRejection = startRequest && !displayRun && !explicitHistoryRunId
+    && lastWsError && lastWsError.requestType === startRequest.message.type
+    && lastWsError.at >= startRequest.at && lastWsError.at - startRequest.at <= START_REJECTION_WINDOW_MS
+    ? lastWsError.message
+    : null
+
+  // run 已经出现，启动请求使命结束
+  useEffect(() => {
+    if (currentRun && startRequest) setStartRequest(null)
+  }, [currentRun, startRequest, setStartRequest])
 
   useEffect(() => {
     if (routeState.runId) {
@@ -1477,6 +1523,17 @@ export default function RunnerPage() {
     return () => window.clearTimeout(timer)
   }, [pendingContinueRunId])
 
+  // 服务端拒绝了刚发出的 workflow:continue：立刻显示原因，不等 15 秒超时
+  useEffect(() => {
+    const sentAt = continueSentAtRef.current
+    if (!lastWsError || sentAt === null || lastWsError.at < sentAt || !pendingContinueRunId) return
+    if (lastWsError.requestType !== 'workflow:continue') return
+    continueSentAtRef.current = null
+    setPendingContinueRunId(null)
+    setIsContinuingHistoryRun(false)
+    setContinueError(lastWsError.message)
+  }, [lastWsError, pendingContinueRunId])
+
   useEffect(() => {
     if (!currentRun || (currentRun.status !== 'running' && currentRun.status !== 'paused')) return
 
@@ -1537,7 +1594,8 @@ export default function RunnerPage() {
       assertSelectedAgents(plan)
       setPersistedAutoRunState('starting', null, true)
       autoRunSentAtRef.current = Date.now()
-      send({
+      // 连接已断开时没发出去：落到下面的 catch 显示原因并允许重试，而不是假装已启动
+      if (!sendOrNotify({
         type: 'workflow:run',
         payload: {
           name: routeState.projectName || autoRun.prompt.slice(0, 60),
@@ -1550,7 +1608,7 @@ export default function RunnerPage() {
           requireConfirm: autoRun.requireConfirm,
           executionMode: autoRun.executionMode,
         },
-      })
+      })) throw new Error(sendFailedMessage())
       setPersistedAutoRunState('started', null, true)
     } catch (error) {
       setPersistedAutoRunState(
@@ -1559,7 +1617,7 @@ export default function RunnerPage() {
         true,
       )
     }
-  }, [agents, autoRun, routeState.projectName, send, setPersistedAutoRunState, updateAutoRunSession])
+  }, [agents, autoRun, routeState.projectName, setPersistedAutoRunState, updateAutoRunSession])
 
   useEffect(() => {
     void startAutoRun()
@@ -1578,6 +1636,20 @@ export default function RunnerPage() {
     autoRunStartedRef.current = false
     void startAutoRun()
   }, [startAutoRun])
+
+  const retryStart = () => {
+    if (!startRequest) return
+    // 新的发送时刻必须晚于上一条错误，否则旧错误会立刻把卡片再顶出来
+    const at = Math.max(Date.now(), (lastWsError?.at ?? 0) + 1)
+    if (!sendOrNotify(startRequest.message)) return
+    setStartRequest({ at, message: startRequest.message })
+  }
+
+  const backToCreate = () => {
+    setStartRequest(null)
+    setRunnerSession(null)
+    navigate('/')
+  }
 
   const cancelAutoRun = useCallback(() => {
     autoRunStartedRef.current = false
@@ -1603,7 +1675,9 @@ export default function RunnerPage() {
         const globalPrompt = buildContinuePrompt(historyRun, latestRound, message)
         const plan = await api.selectAgents(globalPrompt, agents)
         assertSelectedAgents(plan)
-        send({
+        continueSentAtRef.current = Date.now()
+        // 没发出去（连接已断开）：走 catch 显示原因，输入框内容保留
+        if (!sendOrNotify({
           type: 'workflow:continue',
           payload: {
             runId: historyRun.id,
@@ -1613,7 +1687,7 @@ export default function RunnerPage() {
             edges: plan.edges,
             requireConfirm: historyRun.requireConfirm,
           },
-        })
+        })) throw new Error(sendFailedMessage())
         setPendingContinueRunId(historyRun.id)
         setSelectedRoundId(null)
         setInputValue('')
@@ -1681,7 +1755,7 @@ export default function RunnerPage() {
     )
   }
 
-  if (!displayRun && !displayPrompt) {
+  if (!displayRun && !displayPrompt && !startRejection) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
         <div className="text-[56px] opacity-50 select-none">📭</div>
@@ -1731,8 +1805,30 @@ export default function RunnerPage() {
                 <div className="rounded-2xl rounded-br-md bg-transparent px-4 py-3 text-sm leading-6 text-slate-800 ring-1 ring-black/[0.05]">
                   <MarkdownText text={displayPrompt} />
                 </div>
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center self-end rounded-full bg-[radial-gradient(circle_at_30%_30%,#ffcff6_0%,#c5bcff_42%,#8e92ff_100%)] text-[9px] font-bold text-white select-none">
-                  VE
+                <UserAvatar />
+              </div>
+            </div>
+          )}
+
+          {startRejection && (
+            <div className="flex justify-start">
+              <div role="alert" className="max-w-[88%] rounded-2xl rounded-tl-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm leading-6 text-rose-600">
+                {startRejection}
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={retryStart}
+                    className="rounded-full border border-rose-300 bg-white px-3 py-1 text-xs font-medium text-rose-600 transition hover:border-rose-400"
+                  >
+                    {t('重试')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={backToCreate}
+                    className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-slate-400"
+                  >
+                    {t('返回创建页')}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1801,9 +1897,7 @@ export default function RunnerPage() {
                     <div className="rounded-2xl rounded-br-md bg-transparent px-4 py-3 text-sm leading-6 text-slate-800 ring-1 ring-black/[0.05]">
                       <MarkdownText text={round.prompt} />
                     </div>
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center self-end rounded-full bg-[radial-gradient(circle_at_30%_30%,#ffcff6_0%,#c5bcff_42%,#8e92ff_100%)] text-[9px] font-bold text-white select-none">
-                      VE
-                    </div>
+                    <UserAvatar />
                   </div>
                 </div>
               )}
@@ -1885,12 +1979,13 @@ export default function RunnerPage() {
                 summary={pendingConfirm.summary}
                 nextNodeIds={pendingConfirm.nextNodeIds}
                 rateLimitWait={pendingRateLimitWait}
+                // 没发出去（连接已断开）就保留确认卡片，让用户重连后再点
                 onConfirm={(runId, nodeId, instruction) => {
-                  send({ type: 'task:confirm', payload: { runId, roundId: pendingConfirm.roundId, nodeId, instruction } })
+                  if (!sendOrNotify({ type: 'task:confirm', payload: { runId, roundId: pendingConfirm.roundId, nodeId, instruction } })) return
                   setPendingConfirm(null)
                 }}
                 onCancel={(runId) => {
-                  send({ type: 'task:cancel', payload: { runId } })
+                  if (!sendOrNotify({ type: 'task:cancel', payload: { runId } })) return
                   setPendingConfirm(null)
                 }}
               />
@@ -1920,7 +2015,7 @@ export default function RunnerPage() {
                     if (!fixAgentName) throw new Error(t('未能选出修复 agent'))
 
                     const fixPrompt = buildAutoFixPrompt(pendingAutoFix, fixAgentName)
-                    send({
+                    if (!sendOrNotify({
                       type: 'workflow:continue',
                       payload: {
                         runId: pendingAutoFix.runId,
@@ -1933,7 +2028,7 @@ export default function RunnerPage() {
                         edges: [{ from: 'auto-fix', to: 'auto-review' }],
                         requireConfirm: currentRun?.requireConfirm ?? false,
                       },
-                    })
+                    })) throw new Error(sendFailedMessage())
                     setPendingAutoFix(null)
                   } catch (error) {
                     setAutoFixError(getApiErrorMessage(error, t('启动自动修复失败，请重试')))
@@ -1942,7 +2037,7 @@ export default function RunnerPage() {
                   }
                 }}
                 onDecline={() => {
-                  send({ type: 'task:auto_fix_decline', payload: { runId: pendingAutoFix.runId } })
+                  if (!sendOrNotify({ type: 'task:auto_fix_decline', payload: { runId: pendingAutoFix.runId } })) return
                   setPendingAutoFix(null)
                   setAutoFixError(null)
                 }}
@@ -2082,7 +2177,7 @@ export default function RunnerPage() {
                 </span>
                 {currentRun && (currentRun.status === 'running' || currentRun.status === 'paused') && (
                   <button
-                    onClick={() => send({ type: 'task:cancel', payload: { runId: currentRun.id } })}
+                    onClick={() => { sendOrNotify({ type: 'task:cancel', payload: { runId: currentRun.id } }) }}
                     className="rounded-full border border-rose-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-rose-500 transition hover:border-rose-300"
                   >
                     {t('取消')}

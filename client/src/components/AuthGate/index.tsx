@@ -38,6 +38,13 @@ export default function AuthGate({ children }: { children: ReactNode }) {
           <p className="text-sm leading-6 text-slate-600">
             {t('此看板未设置访问密码，免密模式只允许在运行服务的电脑上访问。请在服务端设置 DASHBOARD_SECRET 后重启。')}
           </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-2 self-start rounded-lg bg-[rgb(25,29,38)] px-4 py-2 text-sm font-medium text-white"
+          >
+            {t('刷新')}
+          </button>
         </div>
       </div>
     )
