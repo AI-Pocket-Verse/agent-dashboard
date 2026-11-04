@@ -1,6 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { DAGEngine, MAX_AUTO_FIX_ROUNDS, detectReviewIssues, extractAffectedPaths, getStartableNodes, getNodeDependencies, getNodeOutputTranscript, interpolatePrompt, isAllPrereqsDone, suggestFixAgentByRule } from '../../src/workflows/engine.js'
 import type { NodeRun, Edge } from '@agent-dashboard/shared'
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 function makeNode(id: string, status: NodeRun['status'] = 'pending'): NodeRun {
   return { id, agentName: 'test', agentType: 'custom', prompt: 'do it', codeContext: [], status, logs: [] }
@@ -107,6 +111,47 @@ describe('DAGEngine confirmation instructions', () => {
       ],
       edges: [],
     })).rejects.toThrow('同一个任务中不能重复使用 Agent: planner')
+  })
+
+  it('rejects workflows whose edges form a cycle or reference missing nodes', async () => {
+    const spawned: string[] = []
+    const processManager = { materializeAttachments: () => [], spawn: (_r: string, nodeId: string) => { spawned.push(nodeId) }, kill: () => {} }
+    const store = { saveRun: async () => undefined }
+    const engine = new DAGEngine(processManager as never, store as never, () => undefined)
+    const nodes = [
+      { id: 'A', agentName: 'planner', agentType: 'omc' as const, promptTemplate: 'a' },
+      { id: 'B', agentName: 'architect', agentType: 'omc' as const, promptTemplate: 'b' },
+      { id: 'C', agentName: 'executor', agentType: 'omc' as const, promptTemplate: 'c' },
+    ]
+    const run = (edges: Array<{ from: string; to: string }>) => engine.startWorkflow({
+      name: 'graph', globalPrompt: 'g', codeContext: [], attachments: [], requireConfirm: false, nodes, edges,
+    })
+
+    await expect(run([{ from: 'A', to: 'B' }, { from: 'B', to: 'C' }, { from: 'C', to: 'A' }])).rejects.toThrow('工作流连线成环')
+    await expect(run([{ from: 'B', to: 'B' }])).rejects.toThrow('工作流连线成环')
+    await expect(run([{ from: 'A', to: 'Z' }])).rejects.toThrow('连线引用了不存在的节点: Z')
+    expect(spawned).toEqual([])
+    // 菱形（A→B、A→C、B→C）不是环，应正常启动
+    await expect(run([{ from: 'A', to: 'B' }, { from: 'A', to: 'C' }, { from: 'B', to: 'C' }])).resolves.toMatchObject({ status: 'running' })
+  })
+
+  it('rejects a cyclic follow-up round without touching the existing run', async () => {
+    const completedRun = {
+      id: 'done-run', name: 'done', status: 'completed' as const, nodes: [], edges: [], requireConfirm: false, createdAt: 1,
+    }
+    const processManager = { materializeAttachments: () => [], spawn: () => {}, kill: () => {} }
+    const store = { loadRun: async () => completedRun, saveRun: async () => undefined }
+    const engine = new DAGEngine(processManager as never, store as never, () => undefined)
+
+    await expect(engine.continueWorkflow('done-run', {
+      name: 'next', globalPrompt: 'g', requireConfirm: false,
+      nodes: [
+        { id: 'A', agentName: 'planner', agentType: 'omc', promptTemplate: 'a' },
+        { id: 'B', agentName: 'architect', agentType: 'omc', promptTemplate: 'b' },
+      ],
+      edges: [{ from: 'A', to: 'B' }, { from: 'B', to: 'A' }],
+    })).rejects.toThrow('工作流连线成环')
+    expect(completedRun.status).toBe('completed')
   })
 
   it('allows different workflow runs to execute the same agent name independently', async () => {
@@ -371,6 +416,7 @@ describe('DAGEngine confirmation instructions', () => {
     }
     const engine = new DAGEngine(processManager as never, store as never, () => undefined)
 
+    vi.useFakeTimers()
     await engine.startWorkflow({
       name: 'snapshot flow',
       projectName: 'snapshot-flow',
@@ -383,8 +429,41 @@ describe('DAGEngine confirmation instructions', () => {
       ],
       edges: [],
     })
+    vi.advanceTimersByTime(1000)
 
     expect(savedRuns.some(run => run.nodes[0]?.logs.includes('first running line'))).toBe(true)
+  })
+
+  it('throttles log persistence instead of rewriting the run for every line', async () => {
+    const savedRuns: Array<{ nodes: Array<{ logs: string[] }> }> = []
+    let emit!: (line: string) => void
+    const processManager = {
+      materializeAttachments: () => [],
+      spawn: (
+        _runId: string, nodeId: string, _agentType: string, _agentName: string, _prompt: string,
+        _codeContext: unknown, _attachments: unknown, _projectDir: string,
+        onLog: (nodeId: string, line: string) => void,
+      ) => {
+        emit = line => onLog(nodeId, line)
+      },
+      kill: () => {},
+    }
+    const store = { saveRun: async (run: unknown) => { savedRuns.push(JSON.parse(JSON.stringify(run))) } }
+    const engine = new DAGEngine(processManager as never, store as never, () => undefined)
+
+    vi.useFakeTimers()
+    await engine.startWorkflow({
+      name: 'chatty', globalPrompt: 'g', requireConfirm: false,
+      nodes: [{ id: 'A', agentName: 'planner', agentType: 'omc', promptTemplate: 'p' }],
+      edges: [],
+    })
+    const savesBeforeLogs = savedRuns.length
+    for (let i = 0; i < 500; i++) emit(`line ${i}`)
+
+    expect(savedRuns.length).toBe(savesBeforeLogs)
+    vi.advanceTimersByTime(1000)
+    expect(savedRuns.length).toBe(savesBeforeLogs + 1)
+    expect(savedRuns.at(-1)?.nodes[0].logs).toHaveLength(500)
   })
 
   it('compacts duplicated adjacent output blocks before broadcasting the confirmation summary', async () => {

@@ -2,6 +2,7 @@ import Fastify from 'fastify'
 import { config } from './config.js'
 import { authPlugin } from './auth.js'
 import { ProcessManager } from './processes/manager.js'
+import { killActiveSelections } from './ai/selector.js'
 import { PersistenceStore } from './store/persistence.js'
 import { DAGEngine } from './workflows/engine.js'
 import { WsManager } from './ws/server.js'
@@ -36,7 +37,7 @@ export async function buildApp() {
   // processes are gone, so without this they stay stuck in the UI forever.
   const reaped = store.failInterruptedRuns()
   if (reaped > 0) app.log.info(`Marked ${reaped} interrupted run(s) as failed`)
-  const processManager = new ProcessManager(config.workspaceRoot, config.claudeBin)
+  const processManager = new ProcessManager(config.workspaceRoot, config.claudeBin, { maxRunMs: config.maxRunMs })
 
   let wsManager: WsManager | null = null
   const engine = new DAGEngine(processManager, store, msg => wsManager?.broadcast(msg), config.workspaceRoot)
@@ -57,11 +58,21 @@ export async function buildApp() {
 
   app.get('/api/health', async () => ({ ok: true }))
 
-  return { app, wsManager, store, engine }
+  return { app, wsManager, store, engine, processManager }
 }
 
 if (process.env.NODE_ENV !== 'test') {
-  buildApp().then(({ app }) => {
+  buildApp().then(({ app, processManager }) => {
+    // agent 进程各自成组（不再随终端 Ctrl+C 一起收到信号），服务退出时主动结束它们
+    process.on('exit', () => {
+      processManager.killAll()
+      killActiveSelections()
+    })
+    // 关闭终端（SIGHUP）也要走 exit 清理，否则 agent 进程组成为孤儿
+    const SIGNAL_EXIT_CODES = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 } as const
+    for (const [signal, code] of Object.entries(SIGNAL_EXIT_CODES)) {
+      process.once(signal, () => process.exit(code))
+    }
     app.listen({ port: config.port, host: '0.0.0.0' })
     app.log.info(`Server running on port ${config.port}`)
   })

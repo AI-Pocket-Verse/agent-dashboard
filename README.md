@@ -193,6 +193,8 @@ Then open `http://<host>/` and enter your `DASHBOARD_SECRET` in the login gate.
 | `CLAUDE_BIN` | `claude` | Claude CLI binary |
 | `PORT` | `3001` | HTTP port (WebSocket uses `PORT+1`) |
 | `DATA_DIR` | `server/data` | SQLite database (`app.db`) with run history and templates |
+| `MAX_RUN_MINUTES` | `30` | Longest a single agent node may run before it is stopped (the reason is written to its log); `0` = no limit |
+| `AI_SELECT_TIMEOUT_MS` | `180000` | Time limit for AI agent selection and for planning a follow-up round. Behind your own reverse proxy, keep its read timeout above this (the bundled nginx uses 200s) |
 | `ANTHROPIC_API_KEY` | — | Only needed where `claude` is not signed in (e.g. the Docker image) |
 
 ## Security
@@ -207,7 +209,8 @@ Then open `http://<host>/` and enter your `DASHBOARD_SECRET` in the login gate.
 |---|---|
 | `ERR_PNPM_IGNORED_BUILDS` during `pnpm install` / `pnpm dev` | You are running pnpm 11 or newer, which ignores this repo's build settings. Run `corepack enable` so the pinned pnpm 10 is used, or install with `npx pnpm@10 install`. |
 | `403 Forbidden`, or the WebSocket closes with `4403` | Open mode only accepts requests from this machine. Set `DASHBOARD_SECRET` to use the dashboard from another device or behind a reverse proxy. |
-| AI auto-select (or continuing a task) fails with `spawnSync claude ETIMEDOUT` | Planning runs `claude -p` with a 60-second limit. If your `claude` starts slowly (many plugins, hooks or MCP servers), pick agents manually or use a template. |
+| AI auto-select (or continuing a task) fails with `AI selection timed out` | Planning runs `claude -p` with a 3-minute limit. If your `claude` starts slowly (many plugins, hooks or MCP servers), raise `AI_SELECT_TIMEOUT_MS`, or pick agents manually / use a template. |
+| A node fails with `[系统] 运行时间超过上限` | The node hit `MAX_RUN_MINUTES` (30 by default). Raise it, or set `0` for no limit. |
 | A custom agent node fails with `--agent '<name>' not found` | The agent file is missing. Add `.claude/agents/<name>.md` under `PROJECT_ROOT` or your home directory. |
 | `EADDRINUSE` on 3001 / 3002 / 5173 | Run `./restart.sh`, which frees those ports first. |
 | `docker compose up` cannot pull images | Images are published when a `v*` tag is pushed. Build locally with `docker compose up -d --build`. |

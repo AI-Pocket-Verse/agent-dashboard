@@ -1,7 +1,9 @@
 import Database from 'better-sqlite3'
 import { existsSync, mkdirSync, readFileSync } from 'fs'
 import { join } from 'path'
-import type { WorkflowRun, WorkflowTemplate, RunNodeLogsPage } from '@agent-dashboard/shared'
+import type { NodeRun, WorkflowRound, WorkflowRun, WorkflowTemplate, RunNodeLogsPage } from '@agent-dashboard/shared'
+
+const INTERRUPTED_LOG_LINE = '[系统] 服务重启，执行已中断'
 
 type TemplateRow = {
   id: string
@@ -285,14 +287,71 @@ export class PersistenceStore {
     this.db.prepare('DELETE FROM templates WHERE id = ?').run(id)
   }
 
-  // On startup the process has no live children, so any run still marked
-  // running/paused in the DB is an orphan from a previous process — fail it
-  // so the UI can no longer get stuck on a state that can never resolve.
+  // On startup the process has no live children, so anything still marked
+  // running/paused/waiting — the run, its rounds or its nodes — is an orphan
+  // from a previous process. Fail all of it so the UI never shows a run that
+  // can no longer resolve. Also repairs rows where an older version only
+  // updated the status column and left the rounds/nodes JSON running.
   failInterruptedRuns(now = Date.now()): number {
-    const result = this.db
-      .prepare("UPDATE runs SET status = 'failed', completed_at = ? WHERE status IN ('running', 'paused')")
-      .run(now)
-    return result.changes
+    const rows = this.db.prepare(`
+      SELECT id, status, nodes_json, rounds_json, completed_at FROM runs
+      WHERE status IN ('running', 'paused')
+         OR nodes_json LIKE '%"status":"running"%' OR nodes_json LIKE '%"status":"waiting"%'
+         OR rounds_json LIKE '%"status":"running"%' OR rounds_json LIKE '%"status":"paused"%'
+         OR rounds_json LIKE '%"status":"waiting"%'
+    `).all() as Array<Pick<RunRow, 'id' | 'status' | 'nodes_json' | 'rounds_json' | 'completed_at'>>
+
+    // 返回是否真的改动了节点，用于统计；LIKE 预筛可能命中嵌套字段，不能按行数计
+    const failNode = (node: NodeRun): boolean => {
+      if (node.status !== 'running' && node.status !== 'waiting') return false
+      node.status = 'failed'
+      node.finishedAt ??= now
+      node.logs = [...(Array.isArray(node.logs) ? node.logs : []), INTERRUPTED_LOG_LINE]
+      return true
+    }
+    const isActive = (status: string) => status === 'running' || status === 'paused'
+
+    const update = this.db.prepare(
+      'UPDATE runs SET status = @status, nodes_json = @nodes_json, rounds_json = @rounds_json, completed_at = @completed_at WHERE id = @id',
+    )
+    const failCorrupt = this.db.prepare("UPDATE runs SET status = 'failed', completed_at = @completed_at WHERE id = @id")
+    let changedRuns = 0
+    this.db.transaction(() => {
+      for (const row of rows) {
+        // 单行损坏只跳过该行，不能让服务启动失败
+        try {
+          const nodes = JSON.parse(row.nodes_json) as NodeRun[]
+          let changed = isActive(row.status)
+          nodes.forEach(node => { changed = failNode(node) || changed })
+          const rounds = row.rounds_json ? JSON.parse(row.rounds_json) as WorkflowRound[] : null
+          rounds?.forEach(round => {
+            round.nodes.forEach(node => { changed = failNode(node) || changed })
+            if (isActive(round.status)) {
+              round.status = 'failed'
+              round.completedAt ??= now
+              changed = true
+            }
+          })
+          if (!changed) continue
+          update.run({
+            id: row.id,
+            status: isActive(row.status) ? 'failed' : row.status,
+            nodes_json: JSON.stringify(nodes),
+            rounds_json: rounds ? JSON.stringify(rounds) : null,
+            completed_at: row.completed_at ?? now,
+          })
+          changedRuns++
+        } catch (err) {
+          // 损坏行无法逐节点收尾，至少把运行状态置为失败，避免界面永远停在运行中
+          console.warn(`[persistence] corrupt run ${row.id}, marking failed without node cleanup: ${(err as Error).message}`)
+          if (isActive(row.status)) {
+            failCorrupt.run({ id: row.id, completed_at: row.completed_at ?? now })
+            changedRuns++
+          }
+        }
+      }
+    })()
+    return changedRuns
   }
 
   close(): void {

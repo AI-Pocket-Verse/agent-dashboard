@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { existsSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import Database from 'better-sqlite3'
 import { PersistenceStore } from '../../src/store/persistence.js'
-import type { WorkflowRun, WorkflowTemplate } from '@agent-dashboard/shared'
+import type { NodeRun, WorkflowRun, WorkflowTemplate } from '@agent-dashboard/shared'
 
 const TEST_DIR = '/tmp/agent-dashboard-test-store'
 
@@ -41,6 +42,61 @@ describe('PersistenceStore', () => {
     expect(byId.get('r-running')).toBe('failed')
     expect(byId.get('r-paused')).toBe('failed')
     expect(byId.get('r-done')).toBe('completed')
+  })
+
+  it('fails the rounds and nodes of interrupted runs, not just the run status', async () => {
+    const node = (id: string, status: NodeRun['status']): NodeRun => ({ id, agentName: id, agentType: 'omc', prompt: 'p', codeContext: [], status, logs: ['working'] })
+    const round = (status: WorkflowRun['status'], nodes: NodeRun[]) => ({ id: 'round-1', prompt: 'p', status, nodes, edges: [], createdAt: 1 })
+    const runningNodes = [node('done', 'completed'), node('busy', 'running'), node('todo', 'pending')]
+    await store.saveRun({ id: 'r-running', name: 'a', status: 'running', nodes: runningNodes, edges: [], rounds: [round('running', runningNodes)], activeRoundId: 'round-1', requireConfirm: false, createdAt: 1 })
+    const waitingNodes = [node('waiter', 'waiting')]
+    await store.saveRun({ id: 'r-waiting', name: 'b', status: 'paused', nodes: waitingNodes, edges: [], rounds: [round('paused', waitingNodes)], activeRoundId: 'round-1', requireConfirm: true, createdAt: 1 })
+    // 旧版本已经把 status 列改成 failed，但轮次和节点仍是 running 的存量数据
+    const legacyNodes = [node('stale', 'running')]
+    await store.saveRun({ id: 'r-legacy', name: 'c', status: 'failed', completedAt: 5, nodes: legacyNodes, edges: [], rounds: [round('running', legacyNodes)], activeRoundId: 'round-1', requireConfirm: false, createdAt: 1 })
+    const doneNodes = [node('ok', 'completed')]
+    await store.saveRun({ id: 'r-done', name: 'd', status: 'completed', completedAt: 5, nodes: doneNodes, edges: [], rounds: [round('completed', doneNodes)], activeRoundId: 'round-1', requireConfirm: false, createdAt: 1 })
+
+    expect(store.failInterruptedRuns(100)).toBe(3)
+
+    const running = await store.loadRun('r-running')
+    expect(running?.status).toBe('failed')
+    expect(running?.rounds?.[0].status).toBe('failed')
+    expect(running?.nodes.map(n => n.status)).toEqual(['completed', 'failed', 'pending'])
+    expect(running?.nodes[1].finishedAt).toBe(100)
+    expect(running?.nodes[1].logs.at(-1)).toBe('[系统] 服务重启，执行已中断')
+
+    const waiting = await store.loadRun('r-waiting')
+    expect(waiting?.rounds?.[0].status).toBe('failed')
+    expect(waiting?.nodes[0].status).toBe('failed')
+
+    const legacy = await store.loadRun('r-legacy')
+    expect(legacy?.rounds?.[0].status).toBe('failed')
+    expect(legacy?.nodes[0].status).toBe('failed')
+    expect(legacy?.completedAt).toBe(5)
+
+    const done = await store.loadRun('r-done')
+    expect(done?.nodes[0].logs).toEqual(['working'])
+  })
+
+  it('skips corrupt rows and counts only runs it actually changed', async () => {
+    const base = { edges: [], requireConfirm: false, createdAt: 1 }
+    await store.saveRun({ id: 'r-running', name: 'a', status: 'running', nodes: [], ...base })
+    await store.saveRun({ id: 'r-corrupt', name: 'b', status: 'running', nodes: [], ...base })
+    // 已结束的 run，但节点日志里恰好出现 "status":"running" 文本，LIKE 预筛会命中
+    await store.saveRun({ id: 'r-done', name: 'c', status: 'completed', completedAt: 5, nodes: [], ...base })
+    const raw = new Database(join(TEST_DIR, 'app.db'))
+    raw.prepare("UPDATE runs SET nodes_json = '{not json' WHERE id = 'r-corrupt'").run()
+    raw.prepare(`UPDATE runs SET nodes_json = '[{"id":"n","status":"completed","logs":[],"meta":{"status":"running"}}]' WHERE id = 'r-done'`).run()
+    raw.close()
+
+    expect(store.failInterruptedRuns(100)).toBe(2)
+    expect((await store.loadRun('r-running'))?.status).toBe('failed')
+    // 损坏行无法逐节点收尾，但运行状态必须落到 failed，否则界面永远显示运行中
+    const check = new Database(join(TEST_DIR, 'app.db'))
+    const corrupt = check.prepare("SELECT status, completed_at FROM runs WHERE id = 'r-corrupt'").get() as { status: string; completed_at: number }
+    check.close()
+    expect(corrupt).toEqual({ status: 'failed', completed_at: 100 })
   })
 
   it('loads a single saved run by id with the original prompt', async () => {

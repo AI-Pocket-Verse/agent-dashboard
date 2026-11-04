@@ -3,6 +3,7 @@ import { chmodSync, existsSync, rmSync, writeFileSync } from 'fs'
 import { ProcessManager } from '../../src/processes/manager.js'
 
 const SLEEP_SCRIPT = '/tmp/agent-dashboard-process-sleep.sh'
+const TREE_SCRIPT = '/tmp/agent-dashboard-process-tree.sh'
 
 function writeSleepScript() {
   writeFileSync(SLEEP_SCRIPT, '#!/bin/sh\nsleep 10\n')
@@ -16,6 +17,7 @@ describe('ProcessManager', () => {
   afterEach(() => {
     manager?.killAll()
     if (existsSync(SLEEP_SCRIPT)) rmSync(SLEEP_SCRIPT)
+    if (existsSync(TREE_SCRIPT)) rmSync(TREE_SCRIPT)
   })
 
   it('tracks running process by nodeId', async () => {
@@ -99,8 +101,27 @@ describe('ProcessManager', () => {
     await new Promise(r => setTimeout(r, 180))
 
     const combinedLog = onLog.mock.calls.map(([, line]) => line).join('\n')
-    expect(combinedLog).not.toContain('[系统]')
-    expect(combinedLog).not.toContain('执行超过最大时长')
+    expect(combinedLog).toContain('[系统] 运行时间超过上限（0.05 秒），已终止')
+    expect(onComplete).toHaveBeenCalledWith('node-1', expect.any(Number))
+    expect(manager.getRunningCount()).toBe(0)
+  })
+
+  it('kills the whole process tree when a run is cancelled', async () => {
+    // sleep 不是脚本最后一条命令，sh 会 fork 而不是 exec；sleep 继承输出管道，只杀 sh 时 close 不会触发
+    writeFileSync(TREE_SCRIPT, '#!/bin/sh\necho ready\nsleep 10\necho done\n')
+    chmodSync(TREE_SCRIPT, 0o755)
+    manager = new ProcessManager('/tmp', TREE_SCRIPT, { maxRunMs: 0 })
+    const onComplete = vi.fn()
+    let ready!: () => void
+    const started = new Promise<void>(resolve => { ready = resolve })
+    const onLog = vi.fn((_nodeId: string, line: string) => { if (line === 'ready') ready() })
+    manager.spawn('run-1', 'node-1', 'omc', 'architect', '10', [], [], 'test-project', onLog, onComplete)
+    await started
+    await new Promise(r => setTimeout(r, 50)) // 让 sh fork 出 sleep
+
+    manager.kill('run-1', 'node-1')
+    await new Promise(r => setTimeout(r, 300))
+
     expect(onComplete).toHaveBeenCalledWith('node-1', expect.any(Number))
     expect(manager.getRunningCount()).toBe(0)
   })
@@ -158,5 +179,43 @@ describe('ProcessManager', () => {
     const combinedLog = onLog.mock.calls.map(([, line]) => line).join('\n')
     expect(combinedLog).toContain('WORK_DIR = /tmp/runs/run-1/repo/workspace/project/code-reviewer')
     expect(combinedLog).toContain('WORK_DIR_NAME = code-reviewer')
+  })
+
+  it('reports a timed-out run as failed even if the process exits cleanly on SIGTERM', async () => {
+    writeFileSync(TREE_SCRIPT, "#!/bin/sh\ntrap 'exit 0' TERM\necho ready\nwhile true; do sleep 0.05; done\n")
+    chmodSync(TREE_SCRIPT, 0o755)
+    manager = new ProcessManager('/tmp', TREE_SCRIPT, { maxRunMs: 150 })
+    const onComplete = vi.fn()
+    manager.spawn('run-1', 'node-1', 'omc', 'architect', '10', [], [], 'test-project', vi.fn(), onComplete)
+    await new Promise(r => setTimeout(r, 600))
+
+    expect(onComplete).toHaveBeenCalledTimes(1)
+    expect(onComplete.mock.calls[0][1]).not.toBe(0)
+  })
+
+  it('escalates to SIGKILL when the process ignores SIGTERM after a timeout', async () => {
+    writeFileSync(TREE_SCRIPT, "#!/bin/sh\ntrap '' TERM\necho ready\nsleep 10\necho done\n")
+    chmodSync(TREE_SCRIPT, 0o755)
+    manager = new ProcessManager('/tmp', TREE_SCRIPT, { maxRunMs: 150, killGraceMs: 100 })
+    const onComplete = vi.fn()
+    manager.spawn('run-1', 'node-1', 'omc', 'architect', '10', [], [], 'test-project', vi.fn(), onComplete)
+    await new Promise(r => setTimeout(r, 700))
+
+    expect(onComplete).toHaveBeenCalledTimes(1)
+    expect(onComplete.mock.calls[0][1]).not.toBe(0)
+    expect(manager.getRunningCount()).toBe(0)
+  })
+
+  it('fails the node instead of crashing when the claude binary cannot be started', async () => {
+    manager = new ProcessManager('/tmp', '/nonexistent/agent-dashboard-claude')
+    const onLog = vi.fn()
+    const onComplete = vi.fn()
+    manager.spawn('run-1', 'node-1', 'omc', 'architect', 'task', [], [], 'test-project', onLog, onComplete)
+    await new Promise(r => setTimeout(r, 200))
+
+    expect(onComplete).toHaveBeenCalledTimes(1)
+    expect(onComplete.mock.calls[0][1]).not.toBe(0)
+    expect(onLog.mock.calls.map(([, line]) => line).join('\n')).toContain('无法启动 claude（ENOENT）')
+    expect(manager.getRunningCount()).toBe(0)
   })
 })

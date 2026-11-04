@@ -15,6 +15,8 @@ services:
       - CLAUDE_BIN=${CLAUDE_BIN:-claude}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - DATA_DIR=/app/data
+      - MAX_RUN_MINUTES=${MAX_RUN_MINUTES:-30}
+      - AI_SELECT_TIMEOUT_MS=${AI_SELECT_TIMEOUT_MS:-180000}
       - PORT=3001
       - NODE_ENV=production
     volumes:

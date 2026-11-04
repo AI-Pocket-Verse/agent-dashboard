@@ -2,6 +2,7 @@ import { spawn, ChildProcess } from 'child_process'
 import { mkdirSync, writeFileSync } from 'fs'
 import { basename, join } from 'path'
 import type { CodeContext, SavedAttachment, TaskAttachment } from '@agent-dashboard/shared'
+import { killProcessGroup, processGroupSpawnOptions } from './processGroup.js'
 
 type LogCallback = (nodeId: string, line: string) => void
 type CompleteCallback = (nodeId: string, exitCode: number) => void
@@ -10,24 +11,34 @@ interface ProcessEntry {
   proc: ChildProcess
   nodeId: string
   timers: NodeJS.Timeout[]
+  timedOut: boolean
 }
 
 interface ProcessManagerOptions {
   maxRunMs?: number
+  killGraceMs?: number
 }
 
-const DEFAULT_MAX_RUN_MS = 600_000
+const DEFAULT_MAX_RUN_MS = 30 * 60_000
+// SIGTERM 后等待多久仍未退出就整组 SIGKILL
+const DEFAULT_KILL_GRACE_MS = 5_000
+
+function formatDuration(ms: number): string {
+  return ms >= 60_000 ? `${ms / 60_000} 分钟` : `${ms / 1000} 秒`
+}
 
 export class ProcessManager {
   private processes = new Map<string, ProcessEntry>() // key: `${runId}:${nodeId}`
   private workspaceRoot: string
   private claudeBin: string
   private maxRunMs: number
+  private killGraceMs: number
 
   constructor(workspaceRoot: string, claudeBin = 'claude', options: ProcessManagerOptions = {}) {
     this.workspaceRoot = workspaceRoot
     this.claudeBin = claudeBin
     this.maxRunMs = options.maxRunMs ?? DEFAULT_MAX_RUN_MS
+    this.killGraceMs = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS
   }
 
   materializeAttachments(projectDir: string, attachments: TaskAttachment[]): SavedAttachment[] {
@@ -73,16 +84,30 @@ export class ProcessManager {
       cwd: runDir,
       env: { ...process.env },
       stdio: ['ignore', 'pipe', 'pipe'],
+      ...processGroupSpawnOptions,
     })
 
     const key = `${runId}:${nodeId}`
-    const timers: NodeJS.Timeout[] = []
-    this.processes.set(key, { proc, nodeId, timers })
+    const entry: ProcessEntry = { proc, nodeId, timers: [], timedOut: false }
+    this.processes.set(key, entry)
+
+    // spawn 失败（ENOENT 等）时 Node 可能同时触发 error 与 close，只上报一次
+    let completed = false
+    const complete = (code: number) => {
+      if (completed) return
+      completed = true
+      entry.timers.forEach(timer => clearTimeout(timer))
+      this.processes.delete(key)
+      onComplete(nodeId, code)
+    }
 
     if (this.maxRunMs > 0) {
-      timers.push(setTimeout(() => {
+      entry.timers.push(setTimeout(() => {
         if (!this.processes.has(key)) return
-        proc.kill('SIGTERM')
+        entry.timedOut = true
+        // [系统] 行不会进入下游提示词（getNodeOutputTranscript 会过滤）
+        onLog(nodeId, `[系统] 运行时间超过上限（${formatDuration(this.maxRunMs)}），已终止。可通过 MAX_RUN_MINUTES 调整。`)
+        this.terminate(entry)
       }, this.maxRunMs))
     }
 
@@ -93,25 +118,34 @@ export class ProcessManager {
     proc.stdout?.on('data', handleData)
     proc.stderr?.on('data', handleData)
 
-    proc.on('close', (code) => {
-      timers.forEach(timer => clearTimeout(timer))
-      this.processes.delete(key)
-      onComplete(nodeId, code ?? 1)
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      onLog(nodeId, `[系统] 无法启动 claude（${err.code ?? err.message}）：${this.claudeBin}，请检查 CLAUDE_BIN 或 PATH。`)
+      complete(1)
     })
+
+    proc.on('close', (code) => {
+      // 超时被终止的进程即便捕获 SIGTERM 正常退出，也按失败处理
+      complete(entry.timedOut ? (code || 1) : (code ?? 1))
+    })
+  }
+
+  // 先整组 SIGTERM，宽限期后仍未退出则整组 SIGKILL（close 时统一清理定时器）
+  private terminate(entry: ProcessEntry): void {
+    entry.timers.forEach(timer => clearTimeout(timer))
+    entry.timers = []
+    killProcessGroup(entry.proc)
+    entry.timers.push(setTimeout(() => killProcessGroup(entry.proc, 'SIGKILL'), this.killGraceMs))
   }
 
   kill(runId: string, nodeId: string): void {
     const entry = this.processes.get(`${runId}:${nodeId}`)
-    if (entry) {
-      entry.timers.forEach(timer => clearTimeout(timer))
-      entry.proc.kill('SIGTERM')
-    }
+    if (entry) this.terminate(entry)
   }
 
   killAll(): void {
     this.processes.forEach(({ proc, timers }) => {
       timers.forEach(timer => clearTimeout(timer))
-      proc.kill('SIGTERM')
+      killProcessGroup(proc)
     })
     this.processes.clear()
   }

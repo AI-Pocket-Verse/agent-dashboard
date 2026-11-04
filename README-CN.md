@@ -193,6 +193,8 @@ docker compose up -d
 | `CLAUDE_BIN` | `claude` | Claude CLI 可执行文件 |
 | `PORT` | `3001` | HTTP 端口（WebSocket 使用 `PORT+1`） |
 | `DATA_DIR` | `server/data` | SQLite 数据库（`app.db`），保存运行历史和模板 |
+| `MAX_RUN_MINUTES` | `30` | 单个 agent 节点的最长运行时间，超时会被终止并在日志里写明原因；`0` 表示不限 |
+| `AI_SELECT_TIMEOUT_MS` | `180000` | AI 自动选择和续轮规划的时间上限。自建反向代理时，读超时需大于该值（自带 nginx 为 200s） |
 | `ANTHROPIC_API_KEY` | 无 | 仅在 `claude` 未登录的环境需要（例如 Docker 镜像） |
 
 ## 安全说明
@@ -207,7 +209,8 @@ docker compose up -d
 |---|---|
 | `pnpm install` / `pnpm dev` 报 `ERR_PNPM_IGNORED_BUILDS` | 你用的是 pnpm 11 或更新版本，它会忽略本仓库的构建设置。执行 `corepack enable` 使用锁定的 pnpm 10，或用 `npx pnpm@10 install` 安装。 |
 | 返回 `403 Forbidden`，或 WebSocket 以 `4403` 关闭 | 免密模式只接受本机请求。想从其他设备或通过反向代理访问，请设置 `DASHBOARD_SECRET`。 |
-| AI 自动选择（或继续任务）报 `spawnSync claude ETIMEDOUT` | 规划步骤执行 `claude -p`，上限 60 秒。如果你的 `claude` 启动较慢（插件、hooks、MCP server 较多），请手动选择 agent 或使用模板。 |
+| AI 自动选择（或继续任务）报 `AI selection timed out` | 规划步骤执行 `claude -p`，上限 3 分钟。如果你的 `claude` 启动较慢（插件、hooks、MCP server 较多），可调大 `AI_SELECT_TIMEOUT_MS`，或手动选择 agent、使用模板。 |
+| 节点失败并显示「[系统] 运行时间超过上限」 | 节点达到了 `MAX_RUN_MINUTES`（默认 30 分钟）。调大该值，或设为 `0` 表示不限。 |
 | 自定义 agent 节点报 `--agent '<name>' not found` | 缺少 agent 文件。请在 `PROJECT_ROOT` 或个人主目录下添加 `.claude/agents/<name>.md`。 |
 | 3001 / 3002 / 5173 端口报 `EADDRINUSE` | 执行 `./restart.sh`，它会先释放这些端口。 |
 | `docker compose up` 拉不到镜像 | 镜像在推送 `v*` tag 时发布。可以用 `docker compose up -d --build` 本地构建。 |

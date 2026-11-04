@@ -5,11 +5,13 @@ import type { ProcessManager } from '../processes/manager.js'
 import type { PersistenceStore } from '../store/persistence.js'
 import { getLogPage } from '../store/persistence.js'
 import { FileWatcher } from './fileWatcher.js'
+import { assertValidDag } from './graph.js'
 
 // ─── Auto-fix loop config ─────────────────────────────────────────────────────
 
 export const MAX_AUTO_FIX_ROUNDS = 3
 export const REVIEWER_AGENT_NAME = 'code-reviewer'
+const LOG_PERSIST_INTERVAL_MS = 1000
 
 // Only strong signals: generic words like error/issue/问题 appear in almost every
 // review transcript (including "no issues found") and caused false auto-fix offers.
@@ -165,6 +167,7 @@ export class DAGEngine {
   private activeRuns = new Map<string, WorkflowRun>()
   private pendingAutoFix = new Map<string, AutoFixOffer>()
   private fileWatcher = new FileWatcher()
+  private pendingPersist = new Map<string, NodeJS.Timeout>()
 
   constructor(
     private processManager: ProcessManager,
@@ -173,8 +176,27 @@ export class DAGEngine {
     private workspaceRoot: string = ''
   ) {}
 
+  // 立即落库，并取消该运行尚未执行的节流写入（这次写入已包含最新日志）
+  private saveRunNow(run: WorkflowRun): Promise<void> {
+    const timer = this.pendingPersist.get(run.id)
+    if (timer) {
+      clearTimeout(timer)
+      this.pendingPersist.delete(run.id)
+    }
+    return this.store.saveRun(run)
+  }
+
   private persistSnapshot(run: WorkflowRun): void {
-    void this.store.saveRun(run)
+    void this.saveRunNow(run)
+  }
+
+  // 日志行高频到达：每个运行最多每秒落库一次。每次落库都序列化整份运行记录，逐行写会随日志长度平方增长
+  private persistLogsThrottled(run: WorkflowRun): void {
+    if (this.pendingPersist.has(run.id)) return
+    this.pendingPersist.set(run.id, setTimeout(() => {
+      this.pendingPersist.delete(run.id)
+      void this.store.saveRun(run)
+    }, LOG_PERSIST_INTERVAL_MS))
   }
 
   private getActiveRound(run: WorkflowRun): WorkflowRound {
@@ -218,6 +240,7 @@ export class DAGEngine {
   async startWorkflow(payload: RunWorkflowPayload): Promise<WorkflowRun> {
     assertWorkflowHasNodes(payload.nodes)
     assertUniqueAgentNamesInRun(payload.nodes)
+    assertValidDag(payload.nodes, payload.edges)
 
     const runId = uuid()
     const workspacePath = `runs/${runId}/repo`
@@ -244,7 +267,7 @@ export class DAGEngine {
     }
 
     this.activeRuns.set(run.id, run)
-    await this.store.saveRun(run)
+    await this.saveRunNow(run)
     this.advanceRun(run.id)
     return run
   }
@@ -252,6 +275,7 @@ export class DAGEngine {
   async continueWorkflow(runId: string, payload: RunWorkflowPayload): Promise<WorkflowRun> {
     assertWorkflowHasNodes(payload.nodes)
     assertUniqueAgentNamesInRun(payload.nodes)
+    assertValidDag(payload.nodes, payload.edges)
     const existingRun = this.activeRuns.get(runId) ?? await this.store.loadRun(runId)
     if (!existingRun) {
       throw new Error('运行记录不存在')
@@ -281,7 +305,7 @@ export class DAGEngine {
     }
 
     this.activeRuns.set(existingRun.id, existingRun)
-    await this.store.saveRun(existingRun)
+    await this.saveRunNow(existingRun)
     this.advanceRun(existingRun.id)
     return existingRun
   }
@@ -298,7 +322,7 @@ export class DAGEngine {
     this.activeRuns.delete(runId)
     this.broadcast({ type: 'workflow:status', payload: { runId, roundId, status: 'completed' } })
     this.broadcast({ type: 'task:completed', payload: { runId, roundId } })
-    this.store.saveRun(run)
+    void this.saveRunNow(run)
   }
 
   private maybeBuildAutoFixOffer(run: WorkflowRun, round: WorkflowRound): AutoFixOffer | null {
@@ -434,7 +458,7 @@ export class DAGEngine {
       this.activeRuns.delete(runId)
       this.pendingAutoFix.delete(runId)
       this.fileWatcher.stop(runId)
-      this.store.saveRun(run)
+      void this.saveRunNow(run)
       this.broadcast({ type: 'workflow:status', payload: { runId, roundId, status: 'completed' } })
       this.broadcast({ type: 'task:completed', payload: { runId, roundId } })
       return
@@ -476,7 +500,7 @@ export class DAGEngine {
     if (node) {
       if (node.logs[node.logs.length - 1] === line) return
       node.logs.push(line)
-      this.persistSnapshot(run)
+      this.persistLogsThrottled(run)
     }
     this.broadcast({ type: 'agent:log', payload: { runId, roundId, nodeId, line } })
   }
@@ -500,7 +524,7 @@ export class DAGEngine {
       })
       this.activeRuns.delete(runId)
       this.fileWatcher.stop(runId)
-      await this.store.saveRun(run)
+      await this.saveRunNow(run)
       return
     }
 
@@ -518,7 +542,7 @@ export class DAGEngine {
       this.advanceRun(runId)
     }
 
-    await this.store.saveRun(run)
+    await this.saveRunNow(run)
   }
 
   getActiveRuns(): WorkflowRun[] {
