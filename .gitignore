@@ -34,3 +34,6 @@ ROADMAP.md
 
 # Test artifacts
 .playwright-mcp/
+
+# Task temp files
+.tmp/

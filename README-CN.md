@@ -2,58 +2,163 @@
 
 [English](README.md) | 中文
 
-把多个 Claude Code agent 编排成 DAG 工作流的 Web 看板。在画布上摆放 agent、连线成流水线，每个节点真实拉起 `claude` CLI 进程执行，日志实时流式展示。
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Publish Docker images](https://github.com/AI-Pocket-Verse/agent-dashboard/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/AI-Pocket-Verse/agent-dashboard/actions/workflows/docker-publish.yml)
+![Node.js 22](https://img.shields.io/badge/node-22%20LTS-339933?logo=node.js&logoColor=white)
+![Claude Code](https://img.shields.io/badge/runs-Claude%20Code%20CLI-d97757)
 
-![工作流画布](docs/images/canvas.png)
+把多个 Claude Code agent 编排成 DAG 工作流的 Web 看板。描述任务，自己挑选 agent（或交给 AI 挑选），每个节点都会真实拉起一个 `claude` CLI 进程，节点状态和输出通过 WebSocket 推送到浏览器。运行结束后可以浏览 agent 写出的文件、预览生成的 HTML，并在同一个任务里继续下一轮。
 
-![创建任务](docs/images/dashboard.png)
+![演示](docs/images/demo.gif)
+
+▶ [观看完整演示视频（MP4，英文界面）](docs/media/demo.mp4) -- 真实运行全程录制，等待 agent 的部分做了加速。
+
+## 目录
+
+- [功能](#功能)
+- [工作原理](#工作原理)
+- [快速开始](#快速开始)
+- [使用指南](#使用指南)
+- [Agent 来源](#agent-来源)
+- [Docker 部署](#docker-部署)
+- [配置项](#配置项)
+- [安全说明](#安全说明)
+- [常见问题](#常见问题)
+- [目录结构](#目录结构)
+- [开发](#开发)
+- [License](#license)
 
 ## 功能
 
-- **DAG 工作流画布** —— 将自定义 agent 与 OMC agent 组合成串行/并行流水线（基于 @xyflow）；节点输出通过 `{{nodes.<id>.output}}` 插值传入下游提示词。
-- **真实进程执行** —— 每个节点在隔离的 run 工作区内运行 `claude` CLI，WebSocket 实时推送日志。
-- **AI 智能选型** —— 描述任务，由 Anthropic API 自动挑选并连接合适的 agent。
-- **自动修复循环** —— `code-reviewer` 节点发现阻塞性问题时，自动提供最多 3 轮修复，并路由给合适的 agent。
-- **运行历史与工作区浏览** —— 查看每次运行的产物文件、预览生成的 HTML 原型、分页加载日志。
-- **中英双语界面** —— 默认跟随系统语言（中文环境显示简体中文，其余显示英文），侧边栏底部的语言开关可实时切换。
-- **可选密码鉴权** —— `DASHBOARD_SECRET` 留空即本机免密模式（不弹登录页、零记忆负担）；设置后一个密码同时保护 HTTP API（Bearer，时间安全比对）与 WebSocket 通道，Web UI 通过登录门输入一次。凡他人可访问的部署必须设置。
+- **DAG 工作流** -- 在画布上把自定义 agent 与 OMC 角色 agent 组合成流水线（基于 [@xyflow](https://reactflow.dev)）；节点输出通过 `{{nodes.<id>.output}}` 传入下游提示词。节点按依赖顺序执行。
+- **真实进程执行** -- 每个节点在独立的 run 工作区里运行 `claude` CLI；节点状态和每一行输出都通过 WebSocket 推送。
+- **AI 智能选型** -- 描述任务，由 `claude` 自动挑选并连接合适的 agent。
+- **人工确认** -- 每个节点结束后运行会暂停，你可以查看结果、给下游节点补充要求，或终止运行。
+- **自动修复循环** -- `code-reviewer` 节点发现阻塞性问题时，看板提供最多 3 轮自动修复，并路由给合适的 agent。
+- **多轮任务** -- 运行结束后可以基于同一任务继续提需求，每一轮保留各自的 DAG 和日志。
+- **工作区浏览与 HTML 预览** -- 查看每次运行产出的文件，在沙箱 iframe 里预览生成的 HTML 原型。
+- **运行历史** -- 每次运行都保存在 SQLite，随时重新打开并分页查看日志。
+- **中英双语界面** -- 默认跟随系统语言（简体中文 / 英文），侧边栏底部的语言开关可实时切换。
+- **可选密码鉴权** -- `DASHBOARD_SECRET` 留空即本机免密模式；设置后一个密码同时保护 HTTP API 与 WebSocket 通道。
 
-## 环境要求
+## 工作原理
 
-- Node.js 22+、pnpm
-- 已安装并登录的 [Claude Code](https://claude.com/claude-code) CLI（`claude` 在 PATH 中）
-- `ANTHROPIC_API_KEY`（仅 AI 选型功能需要）
+```mermaid
+flowchart LR
+  UI["Web UI<br/>React + @xyflow"] -- "REST /api" --> API["Fastify 服务<br/>:3001"]
+  UI <-- "WebSocket /ws<br/>日志与状态" --> WS["WebSocket<br/>:3002"]
+  API --> Engine["DAG 引擎"]
+  WS --> Engine
+  Engine -- "每个节点拉起一个进程" --> CLI["claude CLI<br/>--permission-mode auto"]
+  CLI -- "读写文件" --> Work[("$WORKSPACE_ROOT<br/>runs/&lt;runId&gt;/repo")]
+  Engine -- "运行、轮次、日志" --> DB[("SQLite<br/>DATA_DIR/app.db")]
+```
 
-## 本机运行
+1. 前端发送 `workflow:run` 消息，带上节点、连线和你的需求。
+2. DAG 引擎依次启动上游已完成的节点。每个节点是一个 `claude -p` 进程，工作目录是本次运行的工作区 `$WORKSPACE_ROOT/runs/<runId>/repo`。
+3. 进程的每一行 stdout/stderr 都通过 WebSocket 广播并写入 SQLite。`claude -p` 在节点结束时才输出结果，所以运行中的节点会一直显示「Running…」。
+4. 节点结束后，它的输出可以通过 `{{nodes.<id>.output}}` 注入下游节点的提示词。
+
+> agent 以 `--permission-mode auto` 运行，可以不经询问在工作区内修改文件、执行命令。只把看板指向你愿意让 agent 操作的目录。
+
+## 快速开始
+
+### 环境要求
+
+- **Node.js 22 LTS**（Node 24 也能用，但需要从源码编译 `better-sqlite3`，见[常见问题](#常见问题)）
+- **pnpm 10**（pnpm 11 及以上需要多一步，见[常见问题](#常见问题)）
+- 已安装并登录的 [Claude Code](https://claude.com/claude-code) CLI（`claude` 在 `PATH` 中）
+
+### 本机运行
 
 ```bash
-git clone <repo-url> && cd agent-dashboard
+git clone https://github.com/AI-Pocket-Verse/agent-dashboard.git
+cd agent-dashboard
 ./start.sh
 ```
 
-就这一条命令，默认无密码。`start.sh` 首次运行会：
+首次运行时 `start.sh` 会：
 
-1. 生成 `.env`（`DASHBOARD_SECRET` 留空＝免密模式，`PROJECT_ROOT` 默认为上级目录）。
-2. 按需安装依赖（`pnpm install`）。
-3. 启动 server（3001，WebSocket 3002）和 client（5173）。
-4. 自动打开浏览器访问 `http://localhost:5173` 。
+1. 生成 `.env`：`DASHBOARD_SECRET` 留空（不鉴权），`PROJECT_ROOT` 设为仓库的**上级目录**，`WORKSPACE_ROOT` 设为 `<上级目录>/workspace`。想放到别处可以直接改 `.env`。
+2. 没有 `node_modules` 时执行 `pnpm install`。
+3. 启动服务端（HTTP 3001、WebSocket 3002）和 Web UI（5173）。日志写到 `/tmp/agent-dashboard-*.log`，同时输出到终端。
+4. 打开 `http://localhost:5173`（macOS）。
 
-`Ctrl+C` 停止；`./restart.sh` 清理端口后重新启动。想手动控制：
+`Ctrl+C` 停止；`./restart.sh` 会先释放 3001/3002/5173 端口再重新启动。
+
+想手动控制：
 
 ```bash
 pnpm install
-pnpm dev          # 等价于同时启动 server（tsx watch）与 client（vite）
+PROJECT_ROOT=/path/to/your/projects pnpm dev   # 同时启动 server（tsx watch）和 client（vite）
 ```
 
-如需本机也开启密码（比如局域网内他人可访问你的电脑），在 `.env` 里设置后重启：
+## 使用指南
 
-```bash
-DASHBOARD_SECRET=$(openssl rand -hex 16)
-```
+### 1. 描述任务
+
+打开「创建」，写下你想做的东西。
+
+![创建任务](docs/images/dashboard.png)
+
+输入框提供这些操作：
+
+| 操作 | 作用 |
+|---|---|
+| **+** / **代码** | 选择文件或目录（`PROJECT_ROOT` 或个人主目录下）作为 agent 的代码上下文 |
+| **Agent** | 自己挑选 agent，按选择顺序串成一条链执行 |
+| **模板** | 直接运行已保存的工作流模板 |
+| 粘贴 / 选择文件 | 添加图片或文件附件；输入 `@` 可以在需求里引用附件 |
+| （什么都不选） | **AI 自动选择**：由 `claude` 挑选 agent 并连好 DAG |
+
+![选择 agent](docs/images/agents.png)
+
+### 2. 查看运行
+
+提交后进入「运行」页。左侧是这个任务的对话区，显示每个节点的状态和耗时；右侧显示每个 agent 的输出。
+
+![运行中](docs/images/runner.png)
+
+每个节点结束后，运行会暂停并请你确认。你可以给后续 agent 补充要求、点确认继续，或终止运行。如果 `code-reviewer` 节点发现阻塞性问题，会改为弹出自动修复提示。
+
+「流程」页展示当前轮次的 DAG 和各节点的实时状态：
+
+![流程](docs/images/flow.png)
+
+### 3. 查看产出
+
+「代码」页浏览本次运行的工作区并打开任意文本文件；「预览」页在沙箱 iframe 里渲染生成的 HTML 页面。
+
+![工作区文件](docs/images/code.png)
+
+![HTML 预览](docs/images/preview.png)
+
+想继续推进，就在对话框里输入新需求。`claude` 会为同一个工作区规划新一轮 agent，在已有成果上接着做。
+
+### 4. 编排工作流模板
+
+「模板」是可复用工作流的画布。从内置模板或空白模板开始，添加 agent 节点、连线，并编辑每个节点的提示词。用 `{{nodes.<id>.output}}` 把上游节点的输出传进提示词。
+
+![模板画布](docs/images/canvas.png)
+
+### 5. 查看历史
+
+「历史」列出每次运行的状态、参与的 agent 和开始时间。打开任意一条可以重新查看日志、文件和预览，也可以继续新一轮。
+
+![历史](docs/images/history.png)
+
+## Agent 来源
+
+agent 列表由两部分组成：
+
+- **自定义 agent** -- `$PROJECT_ROOT/.claude/agents/`（优先）和 `~/.claude/agents/` 下的 Claude Code subagent 文件（`*.md`）。自定义节点执行 `claude --agent <name>`。
+- **OMC 角色 agent** -- `planner`、`architect`、`designer`、`test-engineer`、`code-reviewer`、`security-reviewer`、`writer`、`debugger`。这些不需要额外文件：节点执行普通的 `claude`，并在提示词里加上角色说明。如果装了 [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode)，它的角色约束也会生效。
+
+内置模板用到了自定义 agent `backend-dev`、`frontend-dev` 和 `flutter-dev`。请创建同名的 agent 文件，或把模板改成你已有的 agent。
 
 ## Docker 部署
 
-部署到服务器时 `DASHBOARD_SECRET` **必须设置**——留空等于向所有能访问主机的人敞开。
+部署到服务器时**必须**设置 `DASHBOARD_SECRET`，否则任何能访问该主机的人都能使用看板。
 
 ```bash
 DASHBOARD_SECRET=$(openssl rand -hex 16) \
@@ -62,33 +167,74 @@ ANTHROPIC_API_KEY=sk-ant-... \
 docker compose up -d
 ```
 
-默认从 [GHCR](https://github.com/orgs/AI-Pocket-Verse/packages?repo_name=agent-dashboard) 拉取现成镜像（`ghcr.io/ai-pocket-verse/agent-dashboard-server` / `-client`），无需本地构建；如需从源码构建，加 `--build` 即可。
+默认从 [GHCR](https://github.com/orgs/AI-Pocket-Verse/packages?repo_name=agent-dashboard) 拉取现成镜像（`ghcr.io/ai-pocket-verse/agent-dashboard-server` / `-client`）。想从源码构建，加上 `--build`。
 
-打开 `http://<host>/` ，在登录门输入 `DASHBOARD_SECRET`。架构说明：
+然后访问 `http://<host>/`，在登录页输入 `DASHBOARD_SECRET`。
 
-- 只有 nginx（80 端口，client 容器）对外：托管 Web UI，并把 `/api` 代理到内部 server:3001、`/ws` 代理到 server:3002。
-- server 容器内置 `claude` CLI，通过 `ANTHROPIC_API_KEY` 认证。
-- 运行历史持久化在宿主机 `./server/data`；agent 工作区在 `PROJECT_ROOT/workspace` 下。
-- 凡可从公网访问的部署，请在前面加 TLS（token 经请求头和 WS 查询串传输）。
+- 只有 nginx（80 端口，`client` 容器）对外暴露；它提供 Web UI，并在内部网络把 `/api` 代理到 server:3001、`/ws` 代理到 server:3002。
+- server 容器内置 `claude` CLI，通过 `ANTHROPIC_API_KEY` 认证，所有 agent 节点和 AI 选型都用它。
+- 运行历史持久化在宿主机的 `./server/data`；agent 工作区位于 `PROJECT_ROOT/workspace`。
+- 凡是公网可访问的部署，请在前面加 TLS（token 会出现在请求头和 WebSocket 查询串里）。
 
-**生产构建严禁设置 `VITE_DASHBOARD_SECRET`** —— 那会把密钥编译进 JS bundle，它只是本机开发的免登录便利项。
+**生产构建绝不要设置 `VITE_DASHBOARD_SECRET`** -- 它会把密码打进 JS 包。它只用于本地开发。
 
-## 配置
+## 配置项
 
 | 环境变量 | 默认值 | 用途 |
 |---|---|---|
-| `DASHBOARD_SECRET` | （空） | API 与 WebSocket 的共享密码；留空即免密（本机模式），部署必须设置 |
-| `PROJECT_ROOT` | 无（必填） | 文件选择器可浏览的根目录 |
-| `WORKSPACE_ROOT` | `$PROJECT_ROOT/workspace` | 每次运行的 agent 工作区位置 |
+| `DASHBOARD_SECRET` | （空） | API 与 WebSocket 共用的密码；留空即关闭鉴权（本机模式）。部署时必填 |
+| `PROJECT_ROOT` | 无（必填） | 代码上下文选择器的根目录，也是项目级 agent 的查找位置 |
+| `WORKSPACE_ROOT` | `$PROJECT_ROOT/workspace` | 每次运行的 agent 工作区所在目录 |
 | `CLAUDE_BIN` | `claude` | Claude CLI 可执行文件 |
-| `PORT` | `3001` | HTTP 端口（WebSocket 用 `PORT+1`） |
-| `DATA_DIR` | `server/data` | SQLite 与运行历史存储 |
+| `PORT` | `3001` | HTTP 端口（WebSocket 使用 `PORT+1`） |
+| `DATA_DIR` | `server/data` | SQLite 数据库（`app.db`），保存运行历史和模板 |
+| `ANTHROPIC_API_KEY` | 无 | 仅在 `claude` 未登录的环境需要（例如 Docker 镜像） |
 
-## 从源码构建
+## 安全说明
+
+- **免密模式（不设 `DASHBOARD_SECRET`）只适合单人使用的本机。** 服务端监听所有网卡，且不校验 WebSocket 来源，所以任何能访问 3001/3002 端口的设备、或者你浏览器里打开的任意网页，都能发起 agent 运行。只要存在这类风险，就请设置 `DASHBOARD_SECRET`。
+- 设置密码后，HTTP API 要求 `Authorization: Bearer <secret>`（时间安全比对），WebSocket 要求 `?secret=<secret>`。Web UI 只需输入一次，之后保存在 `localStorage`。
+- 文件浏览只允许 `PROJECT_ROOT`、`WORKSPACE_ROOT` 和个人主目录，并拒绝 `.ssh`、`.env` 等隐藏路径。
+
+## 常见问题
+
+| 现象 | 处理 |
+|---|---|
+| `pnpm install` / `pnpm dev` 报 `ERR_PNPM_IGNORED_BUILDS` | pnpm 11 起不再读取 `onlyBuiltDependencies`。用 pnpm 10 安装（`npx pnpm@10 install`），或执行一次 `pnpm approve-builds better-sqlite3 esbuild` 批准原生构建（会改写 `pnpm-workspace.yaml`）。 |
+| Node 24 下 `better-sqlite3` 编译失败 | `better-sqlite3` 11 没有 Node 24 的预编译包，需要从源码编译，依赖 Xcode Command Line Tools（macOS）或 `build-essential` + Python（Linux）。最省事的是用 Node 22 LTS。 |
+| AI 自动选择（或继续任务）报 `spawnSync claude ETIMEDOUT` | 规划步骤执行 `claude -p`，上限 60 秒。如果你的 `claude` 启动较慢（插件、hooks、MCP server 较多），请手动选择 agent 或使用模板。 |
+| 自定义 agent 节点报 `--agent '<name>' not found` | 缺少 agent 文件。请在 `PROJECT_ROOT` 或个人主目录下添加 `.claude/agents/<name>.md`。 |
+| 3001 / 3002 / 5173 端口报 `EADDRINUSE` | 执行 `./restart.sh`，它会先释放这些端口。 |
+| `docker compose up` 拉不到镜像 | 镜像在推送 `v*` tag 时发布。可以用 `docker compose up -d --build` 本地构建。 |
+
+## 目录结构
+
+```text
+agent-dashboard/
+├── client/               # React 19 + Vite Web UI
+│   └── src/
+│       ├── pages/        # 创建（Dashboard）、运行（RunnerPage）、模板（Canvas）、历史（History）
+│       ├── components/   # 任务输入、日志流、文件查看、弹窗等
+│       ├── store/        # zustand 状态
+│       └── lib/          # API 客户端、鉴权、i18n
+├── server/               # Fastify API + WebSocket 服务
+│   └── src/
+│       ├── workflows/    # DAG 引擎、内置模板、文件监听
+│       ├── processes/    # claude CLI 进程管理
+│       ├── routes/       # REST 接口（runs、templates、agents、fs、ai）
+│       ├── store/        # SQLite 持久化
+│       └── ws/           # WebSocket 服务与消息处理
+├── shared/types.ts       # client 与 server 共用的类型
+├── docker-compose.yml    # nginx（client）+ server
+└── start.sh / restart.sh # 本地启动脚本
+```
+
+## 开发
 
 ```bash
 pnpm install
 pnpm --filter server test && pnpm --filter client test
+pnpm --filter client build
 pnpm dev   # server + client 热更新
 ```
 
